@@ -1,0 +1,24 @@
+{
+  "name": "capstone-hub",
+  "version": "0.1.0",
+  "description": "CapstoneHub — Software Engineering Project Management and Lifecycle Platform",
+  "private": true,
+  "workspaces": [
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=backend",
+    "build": "npm run build --workspace=backend",
+    "start": "npm run start --workspace=backend",
+    "test": "npm run test --workspace=backend",
+    "typecheck": "npm run typecheck --workspace=backend"
+  },
+  "keywords": [
+    "project-management",
+    "capstone",
+    "agile",
+    "srs"
+  ],
+  "author": "",
+  "license": "ISC"
+}
