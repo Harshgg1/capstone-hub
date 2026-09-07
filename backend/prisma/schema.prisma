@@ -1,0 +1,68 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  FACULTY
+  TEAM_LEAD
+  TEAM_MEMBER
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String
+  role          Role           @default(TEAM_MEMBER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  teams         TeamMember[]
+  ledTeams      Team[]         @relation("TeamLead")
+  facultyReview Project[]      @relation("FacultyAdvisor")
+
+  @@map("users")
+}
+
+model Project {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  facultyId   String?
+  faculty     User?        @relation("FacultyAdvisor", fields: [facultyId], references: [id], onDelete: SetNull)
+  teamId      String?      @unique
+  team        Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("projects")
+}
+
+model Team {
+  id        String       @id @default(uuid())
+  name      String
+  leadId    String?
+  lead      User?        @relation("TeamLead", fields: [leadId], references: [id], onDelete: SetNull)
+  project   Project?
+  members   TeamMember[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @default(TEAM_MEMBER)
+  joinedAt  DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
