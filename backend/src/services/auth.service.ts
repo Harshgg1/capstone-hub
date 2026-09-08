@@ -51,10 +51,12 @@ export class AuthService {
       throw new AppError('Name is required', 400);
     }
 
+    const allowedRegisterRoles: Role[] = [Role.TEAM_MEMBER, Role.FACULTY];
+
     let userRole: Role = Role.TEAM_MEMBER;
-    if (role) {
-      if (!Object.values(Role).includes(role)) {
-        throw new AppError(`Invalid role. Allowed roles: ${Object.values(Role).join(', ')}`, 400);
+    if (role !== undefined) {
+      if (!allowedRegisterRoles.includes(role)) {
+        throw new AppError(`Invalid role. Allowed roles: ${allowedRegisterRoles.join(', ')}`, 400);
       }
       userRole = role;
     }
