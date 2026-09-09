@@ -23,6 +23,9 @@ router.patch('/:id', ProjectController.updateProject);
 router.get('/:id/members', ProjectController.getTeamMembers);
 router.post('/:id/members', ProjectController.addTeamMember);
 router.delete('/:id/members/:userId', ProjectController.removeTeamMember);
+router.patch('/:id/members/:userId/role', ProjectController.updateMemberRole);
+router.put('/:id/members/:userId/role', ProjectController.updateMemberRole);
+router.patch('/:id/members/:userId', ProjectController.updateMemberRole);
 
 export default router;
 

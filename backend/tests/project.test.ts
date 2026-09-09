@@ -20,6 +20,15 @@ vi.mock('../src/lib/prisma', () => ({
     },
     team: {
       findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    teamMember: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
@@ -368,4 +377,139 @@ describe('Project API', () => {
       });
     });
   });
+
+  describe('PATCH /api/projects/:id/members/:userId/role - Role Assignment', () => {
+    const projectWithTeam = {
+      ...mockProject,
+      teamId: 'team-uuid-1',
+      team: {
+        id: 'team-uuid-1',
+        name: 'Alpha Team',
+        leadId: 'lead-uuid-1',
+        members: [
+          { teamId: 'team-uuid-1', userId: 'lead-uuid-1', role: Role.TEAM_LEAD },
+          { teamId: 'team-uuid-1', userId: 'member-uuid-1', role: Role.TEAM_MEMBER },
+        ],
+      },
+    };
+
+    it('should return 401 if unauthenticated', async () => {
+      const response = await request(app)
+        .patch('/api/projects/proj-uuid-1/members/member-uuid-1/role')
+        .send({ role: Role.TEAM_LEAD });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 403 if requester is a regular TEAM_MEMBER', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(projectWithTeam);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .patch('/api/projects/proj-uuid-1/members/member-uuid-1/role')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ role: Role.TEAM_LEAD });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain('insufficient permissions');
+    });
+
+    it('should return 400 if invalid role is provided', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(projectWithTeam);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .patch('/api/projects/proj-uuid-1/members/member-uuid-1/role')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ role: 'INVALID_ROLE' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid member role');
+    });
+
+    it('should return 404 if target user is not in the project team', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(projectWithTeam);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .patch('/api/projects/proj-uuid-1/members/nonexistent-member/role')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ role: Role.TEAM_LEAD });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('not a member');
+    });
+
+    it('should allow FACULTY to promote a member to TEAM_LEAD', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(projectWithTeam);
+      (prisma.teamMember.update as any).mockResolvedValue({
+        id: 'tm-uuid-1',
+        teamId: 'team-uuid-1',
+        userId: 'member-uuid-1',
+        role: Role.TEAM_LEAD,
+        user: {
+          id: 'member-uuid-1',
+          name: 'Charlie Member',
+          email: 'charlie.member@example.com',
+          role: Role.TEAM_MEMBER,
+        },
+      });
+      (prisma.team.update as any).mockResolvedValue({});
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .patch('/api/projects/proj-uuid-1/members/member-uuid-1/role')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ role: Role.TEAM_LEAD });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.role).toBe(Role.TEAM_LEAD);
+      expect(prisma.teamMember.update).toHaveBeenCalledWith({
+        where: {
+          teamId_userId: {
+            teamId: 'team-uuid-1',
+            userId: 'member-uuid-1',
+          },
+        },
+        data: { role: Role.TEAM_LEAD },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
+      });
+      expect(prisma.team.update).toHaveBeenCalledWith({
+        where: { id: 'team-uuid-1' },
+        data: { leadId: 'member-uuid-1' },
+      });
+    });
+
+    it('should allow designated TEAM_LEAD to demote another member/lead to TEAM_MEMBER', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(projectWithTeam);
+      (prisma.teamMember.update as any).mockResolvedValue({
+        id: 'tm-uuid-2',
+        teamId: 'team-uuid-1',
+        userId: 'member-uuid-1',
+        role: Role.TEAM_MEMBER,
+        user: {
+          id: 'member-uuid-1',
+          name: 'Charlie Member',
+          email: 'charlie.member@example.com',
+          role: Role.TEAM_MEMBER,
+        },
+      });
+
+      const token = generateToken(teamLeadUser);
+      const response = await request(app)
+        .patch('/api/projects/proj-uuid-1/members/member-uuid-1/role')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ role: Role.TEAM_MEMBER });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.role).toBe(Role.TEAM_MEMBER);
+    });
+  });
 });
+
