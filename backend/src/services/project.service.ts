@@ -191,5 +191,222 @@ export class ProjectService {
       },
     });
   }
+
+  public static async addTeamMember(
+    projectId: string,
+    data: { userId?: string; role?: Role },
+    user: { id: string; role: Role }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    if (!project.teamId || !project.team) {
+      throw new AppError('Project does not have an assigned team', 400);
+    }
+
+    const isFaculty = user.role === Role.FACULTY;
+    const isTeamLead =
+      project.team.leadId === user.id ||
+      project.team.members.some(
+        (m) => m.userId === user.id && m.role === Role.TEAM_LEAD
+      );
+
+    if (!isFaculty && !isTeamLead) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    const { userId, role } = data;
+
+    if (!userId || typeof userId !== 'string' || !userId.trim()) {
+      throw new AppError('User ID is required', 400);
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId.trim() },
+    });
+
+    if (!targetUser) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (targetUser.role === Role.FACULTY) {
+      throw new AppError('Faculty users cannot be added as team members', 400);
+    }
+
+    let memberRole: Role = Role.TEAM_MEMBER;
+    if (role !== undefined) {
+      if (role !== Role.TEAM_MEMBER && role !== Role.TEAM_LEAD) {
+        throw new AppError('Invalid member role. Allowed roles: TEAM_MEMBER, TEAM_LEAD', 400);
+      }
+      memberRole = role;
+    }
+
+    const existingMember = await prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: project.teamId,
+          userId: targetUser.id,
+        },
+      },
+    });
+
+    if (existingMember) {
+      throw new AppError('User is already a member of this project team', 409);
+    }
+
+    const newMember = await prisma.teamMember.create({
+      data: {
+        teamId: project.teamId,
+        userId: targetUser.id,
+        role: memberRole,
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    });
+
+    if (memberRole === Role.TEAM_LEAD && !project.team.leadId) {
+      await prisma.team.update({
+        where: { id: project.teamId },
+        data: { leadId: targetUser.id },
+      });
+    }
+
+    return newMember;
+  }
+
+  public static async removeTeamMember(
+    projectId: string,
+    memberUserId: string,
+    user: { id: string; role: Role }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    if (!project.teamId || !project.team) {
+      throw new AppError('Project does not have an assigned team', 400);
+    }
+
+    if (!memberUserId || typeof memberUserId !== 'string' || !memberUserId.trim()) {
+      throw new AppError('Member user ID is required', 400);
+    }
+
+    const targetUserId = memberUserId.trim();
+
+    const isMember = project.team.members.some((m) => m.userId === targetUserId);
+    if (!isMember) {
+      throw new AppError('User is not a member of this project team', 404);
+    }
+
+    const isFaculty = user.role === Role.FACULTY;
+    const isTeamLead =
+      project.team.leadId === user.id ||
+      project.team.members.some(
+        (m) => m.userId === user.id && m.role === Role.TEAM_LEAD
+      );
+    const isSelf = user.id === targetUserId;
+
+    if (!isFaculty && !isTeamLead && !isSelf) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    await prisma.teamMember.delete({
+      where: {
+        teamId_userId: {
+          teamId: project.teamId,
+          userId: targetUserId,
+        },
+      },
+    });
+
+    if (project.team.leadId === targetUserId) {
+      await prisma.team.update({
+        where: { id: project.teamId },
+        data: { leadId: null },
+      });
+    }
+
+    return { message: 'Team member removed successfully' };
+  }
+
+  /**
+   * Retrieve team members for a project with optional pagination.
+   * @param projectId - ID of the project.
+   * @param pagination - Optional pagination options { page, pageSize }.
+   * @returns An object containing total count and a page of members.
+   */
+  public static async getTeamMembers(
+    projectId: string,
+    pagination?: { page?: number; pageSize?: number }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: {
+              include: {
+                user: {
+                  select: { id: true, name: true, email: true, role: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    if (!project.teamId || !project.team) {
+      throw new AppError('Project does not have an assigned team', 400);
+    }
+
+    const page = pagination?.page && pagination.page > 0 ? pagination.page : 1;
+    const pageSize = pagination?.pageSize && pagination.pageSize > 0 ? pagination.pageSize : 10;
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    const totalCount = await prisma.teamMember.count({ where: { teamId: project.teamId } });
+    const members = await prisma.teamMember.findMany({
+      where: { teamId: project.teamId },
+      skip,
+      take,
+      include: {
+        user: { select: { id: true, name: true, email: true, role: true } },
+      },
+    });
+
+    return { totalCount, page, pageSize, members };
+  }
 }
+
 

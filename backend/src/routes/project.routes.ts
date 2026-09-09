@@ -19,6 +19,10 @@ router.get('/:id', ProjectController.getProjectById);
 // Update project
 router.put('/:id', ProjectController.updateProject);
 router.patch('/:id', ProjectController.updateProject);
+// Team member routes
+router.get('/:id/members', ProjectController.getTeamMembers);
+router.post('/:id/members', ProjectController.addTeamMember);
+router.delete('/:id/members/:userId', ProjectController.removeTeamMember);
 
 export default router;
 

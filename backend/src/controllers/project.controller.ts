@@ -86,5 +86,70 @@ export class ProjectController {
       next(error);
     }
   }
-}
 
+  /**
+   * Add a team member to a project's team.
+   * Expects JSON body: { userId: string, role?: Role }
+   */
+  public static async addTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId } = req.params;
+      const { userId, role } = req.body;
+      const member = await ProjectService.addTeamMember(projectId, { userId, role }, req.user);
+      res.status(201).json({ success: true, data: member });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Remove a team member from a project's team.
+   * URL param `userId` identifies the member to remove.
+   */
+  public static async removeTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId, userId: memberUserId } = req.params;
+      const result = await ProjectService.removeTeamMember(projectId, memberUserId, req.user);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Get team members of a project with optional pagination.
+   * Query params: page, pageSize
+   */
+  public static async getTeamMembers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id: projectId } = req.params;
+      const page = req.query.page ? Number(req.query.page) : undefined;
+      const pageSize = req.query.pageSize ? Number(req.query.pageSize) : undefined;
+      const result = await ProjectService.getTeamMembers(projectId, { page, pageSize });
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+}
