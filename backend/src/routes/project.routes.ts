@@ -16,4 +16,9 @@ router.get('/', ProjectController.getProjects);
 // Retrieve specific project
 router.get('/:id', ProjectController.getProjectById);
 
+// Update project
+router.put('/:id', ProjectController.updateProject);
+router.patch('/:id', ProjectController.updateProject);
+
 export default router;
+

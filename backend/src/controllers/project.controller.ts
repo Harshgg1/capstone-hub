@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ProjectService } from '../services/project.service';
+import { AppError } from '../middleware/errorHandler';
 
 export class ProjectController {
   public static async createProject(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -57,4 +58,33 @@ export class ProjectController {
       next(error);
     }
   }
+
+  public static async updateProject(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+
+      const { id } = req.params;
+      const project = await ProjectService.updateProject(id, req.body, req.user);
+
+      res.status(200).json({
+        success: true,
+        message: 'Project updated successfully',
+        data: project,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          success: false,
+          error: error.message,
+          message: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  }
 }
+
