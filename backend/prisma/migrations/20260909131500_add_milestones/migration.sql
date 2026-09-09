@@ -17,3 +17,5 @@ CREATE TABLE "milestones" (
 
 -- AddForeignKey
 ALTER TABLE "milestones" ADD CONSTRAINT "milestones_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE INDEX "milestones_projectId_dueDate_idx" ON "milestones" ("projectId", "dueDate");
