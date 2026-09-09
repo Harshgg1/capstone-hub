@@ -407,6 +407,104 @@ export class ProjectService {
 
     return { totalCount, page, pageSize, members };
   }
+
+  /**
+   * Assign or change a team member's role within a project team.
+   * Enforces RBAC so only FACULTY or project TEAM_LEAD can perform role changes.
+   *
+   * @param projectId - ID of the project
+   * @param memberUserId - User ID of the team member whose role is being changed
+   * @param data - Role update data { role?: Role }
+   * @param user - Current authenticated actor { id, role }
+   * @returns Updated team member record
+   */
+  public static async updateMemberRole(
+    projectId: string,
+    memberUserId: string,
+    data: { role?: Role },
+    user: { id: string; role: Role }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    if (!project.teamId || !project.team) {
+      throw new AppError('Project does not have an assigned team', 400);
+    }
+
+    const isFaculty = user.role === Role.FACULTY;
+    const isTeamLead =
+      project.team.leadId === user.id ||
+      project.team.members.some(
+        (m) => m.userId === user.id && m.role === Role.TEAM_LEAD
+      );
+
+    if (!isFaculty && !isTeamLead) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    if (!memberUserId || typeof memberUserId !== 'string' || !memberUserId.trim()) {
+      throw new AppError('Member user ID is required', 400);
+    }
+
+    const targetUserId = memberUserId.trim();
+
+    const existingMember = project.team.members.find((m) => m.userId === targetUserId);
+    if (!existingMember) {
+      throw new AppError('User is not a member of this project team', 404);
+    }
+
+    const { role } = data;
+    if (!role || (role !== Role.TEAM_MEMBER && role !== Role.TEAM_LEAD)) {
+      throw new AppError('Invalid member role. Allowed roles: TEAM_MEMBER, TEAM_LEAD', 400);
+    }
+
+    const updatedMember = await prisma.teamMember.update({
+      where: {
+        teamId_userId: {
+          teamId: project.teamId,
+          userId: targetUserId,
+        },
+      },
+      data: {
+        role,
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    });
+
+    // Sync team lead on Team entity
+    if (role === Role.TEAM_LEAD && project.team.leadId !== targetUserId) {
+      await prisma.team.update({
+        where: { id: project.teamId },
+        data: { leadId: targetUserId },
+      });
+    } else if (role === Role.TEAM_MEMBER && project.team.leadId === targetUserId) {
+      const otherLead = project.team.members.find(
+        (m) => m.userId !== targetUserId && m.role === Role.TEAM_LEAD
+      );
+      await prisma.team.update({
+        where: { id: project.teamId },
+        data: { leadId: otherLead ? otherLead.userId : null },
+      });
+    }
+
+    return updatedMember;
+  }
 }
 
 

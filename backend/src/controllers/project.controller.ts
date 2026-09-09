@@ -152,4 +152,35 @@ export class ProjectController {
     }
   }
 
+  /**
+   * Update the role of a team member in a project's team.
+   * Expects JSON body: { role: Role }
+   */
+  public static async updateMemberRole(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId, userId: memberUserId } = req.params;
+      const { role } = req.body;
+      const updatedMember = await ProjectService.updateMemberRole(
+        projectId,
+        memberUserId,
+        { role },
+        req.user
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Member role updated successfully',
+        data: updatedMember,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
 }
