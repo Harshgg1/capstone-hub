@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { RequirementService } from '../services/requirement.service';
-import { RequirementType } from '@prisma/client';
+import { RequirementPriority, RequirementStatus, RequirementType } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
 
 export class RequirementController {
@@ -30,7 +30,7 @@ export class RequirementController {
   }
 
   /**
-   * Get all requirements for a project.
+   * Get all requirements for a project with optional filters.
    */
   public static async getRequirements(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -40,7 +40,13 @@ export class RequirementController {
       }
       const { projectId } = req.params;
       const type = req.query.type as RequirementType | undefined;
-      const requirements = await RequirementService.getRequirementsByProjectId(projectId, { type }, req.user);
+      const priority = req.query.priority as RequirementPriority | undefined;
+      const status = req.query.status as RequirementStatus | undefined;
+      const requirements = await RequirementService.getRequirementsByProjectId(
+        projectId,
+        { type, priority, status },
+        req.user
+      );
       res.status(200).json({
         success: true,
         data: requirements,

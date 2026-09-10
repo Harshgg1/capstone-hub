@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import { Role, RequirementType } from '@prisma/client';
+import { Role, RequirementType, RequirementPriority, RequirementStatus } from '@prisma/client';
 import { app } from '../src/app';
 import { prisma } from '../src/lib/prisma';
 import { config } from '../src/config';
@@ -75,6 +75,8 @@ describe('Requirement API', () => {
     title: 'User Authentication',
     description: 'System must allow users to register and login using JWT tokens',
     type: RequirementType.FUNCTIONAL,
+    priority: RequirementPriority.HIGH,
+    status: RequirementStatus.DRAFT,
     projectId: 'proj-uuid-1',
     project: mockProjectWithTeam,
     createdAt: new Date(),
@@ -86,6 +88,8 @@ describe('Requirement API', () => {
     title: 'Response Time Performance',
     description: 'API response times should not exceed 200ms under 500 concurrent users',
     type: RequirementType.NON_FUNCTIONAL,
+    priority: RequirementPriority.MEDIUM,
+    status: RequirementStatus.IN_REVIEW,
     projectId: 'proj-uuid-1',
     project: mockProjectWithTeam,
     createdAt: new Date(),
@@ -170,7 +174,41 @@ describe('Requirement API', () => {
       expect(response.body.error).toContain('Invalid requirement type');
     });
 
-    it('should allow project team member to create a FUNCTIONAL requirement', async () => {
+    it('should return 400 if priority is invalid', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/projects/proj-uuid-1/requirements')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Valid Title',
+          description: 'Valid Desc',
+          priority: 'SUPER_URGENT',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid requirement priority');
+    });
+
+    it('should return 400 if status is invalid', async () => {
+      (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/projects/proj-uuid-1/requirements')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Valid Title',
+          description: 'Valid Desc',
+          status: 'RANDOM_STATUS',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid requirement status');
+    });
+
+    it('should allow project team member to create a requirement with explicit priority and status', async () => {
       (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
       (prisma.requirement.create as any).mockResolvedValue(mockFunctionalRequirement);
 
@@ -182,25 +220,35 @@ describe('Requirement API', () => {
           title: 'User Authentication',
           description: 'System must allow users to register and login using JWT tokens',
           type: RequirementType.FUNCTIONAL,
+          priority: RequirementPriority.HIGH,
+          status: RequirementStatus.DRAFT,
         });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
       expect(response.body.data.title).toBe(mockFunctionalRequirement.title);
       expect(response.body.data.type).toBe(RequirementType.FUNCTIONAL);
+      expect(response.body.data.priority).toBe(RequirementPriority.HIGH);
+      expect(response.body.data.status).toBe(RequirementStatus.DRAFT);
       expect(prisma.requirement.create).toHaveBeenCalledWith({
         data: {
           title: 'User Authentication',
           description: 'System must allow users to register and login using JWT tokens',
           type: RequirementType.FUNCTIONAL,
+          priority: RequirementPriority.HIGH,
+          status: RequirementStatus.DRAFT,
           projectId: 'proj-uuid-1',
         },
       });
     });
 
-    it('should allow FACULTY to create a NON_FUNCTIONAL requirement', async () => {
+    it('should allow FACULTY to create a requirement with default priority and status', async () => {
       (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
-      (prisma.requirement.create as any).mockResolvedValue(mockNonFunctionalRequirement);
+      (prisma.requirement.create as any).mockResolvedValue({
+        ...mockNonFunctionalRequirement,
+        priority: RequirementPriority.MEDIUM,
+        status: RequirementStatus.DRAFT,
+      });
 
       const token = generateToken(facultyUser);
       const response = await request(app)
@@ -214,7 +262,16 @@ describe('Requirement API', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.type).toBe(RequirementType.NON_FUNCTIONAL);
+      expect(prisma.requirement.create).toHaveBeenCalledWith({
+        data: {
+          title: 'Response Time Performance',
+          description: 'API response times should not exceed 200ms under 500 concurrent users',
+          type: RequirementType.NON_FUNCTIONAL,
+          priority: RequirementPriority.MEDIUM,
+          status: RequirementStatus.DRAFT,
+          projectId: 'proj-uuid-1',
+        },
+      });
     });
   });
 
@@ -237,13 +294,13 @@ describe('Requirement API', () => {
       expect(response.body.data.length).toBe(2);
     });
 
-    it('should filter requirements by type when query param provided', async () => {
+    it('should filter requirements by priority and status when query params provided', async () => {
       (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
-      (prisma.requirement.findMany as any).mockResolvedValue([mockNonFunctionalRequirement]);
+      (prisma.requirement.findMany as any).mockResolvedValue([mockFunctionalRequirement]);
 
       const token = generateToken(teamMemberUser);
       const response = await request(app)
-        .get('/api/projects/proj-uuid-1/requirements?type=NON_FUNCTIONAL')
+        .get('/api/projects/proj-uuid-1/requirements?priority=HIGH&status=DRAFT')
         .set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
@@ -251,7 +308,8 @@ describe('Requirement API', () => {
       expect(prisma.requirement.findMany).toHaveBeenCalledWith({
         where: {
           projectId: 'proj-uuid-1',
-          type: RequirementType.NON_FUNCTIONAL,
+          priority: RequirementPriority.HIGH,
+          status: RequirementStatus.DRAFT,
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -270,6 +328,8 @@ describe('Requirement API', () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data.id).toBe('req-uuid-1');
+      expect(response.body.data.priority).toBe(RequirementPriority.HIGH);
+      expect(response.body.data.status).toBe(RequirementStatus.DRAFT);
     });
 
     it('should return 404 if requirement not found', async () => {
@@ -297,12 +357,12 @@ describe('Requirement API', () => {
       expect(response.status).toBe(403);
     });
 
-    it('should allow project team member to update requirement', async () => {
+    it('should allow updating priority and transitioning status through workflow (DRAFT -> IN_REVIEW)', async () => {
       (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
       const updatedReq = {
         ...mockFunctionalRequirement,
-        title: 'Enhanced Authentication',
-        description: 'Updated auth description',
+        priority: RequirementPriority.CRITICAL,
+        status: RequirementStatus.IN_REVIEW,
       };
       (prisma.requirement.update as any).mockResolvedValue(updatedReq);
 
@@ -311,20 +371,36 @@ describe('Requirement API', () => {
         .patch('/api/requirements/req-uuid-1')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          title: 'Enhanced Authentication',
-          description: 'Updated auth description',
+          priority: RequirementPriority.CRITICAL,
+          status: RequirementStatus.IN_REVIEW,
         });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data.title).toBe('Enhanced Authentication');
+      expect(response.body.data.priority).toBe(RequirementPriority.CRITICAL);
+      expect(response.body.data.status).toBe(RequirementStatus.IN_REVIEW);
       expect(prisma.requirement.update).toHaveBeenCalledWith({
         where: { id: 'req-uuid-1' },
         data: {
-          title: 'Enhanced Authentication',
-          description: 'Updated auth description',
+          priority: RequirementPriority.CRITICAL,
+          status: RequirementStatus.IN_REVIEW,
         },
       });
+    });
+
+    it('should reject invalid status workflow transition (DRAFT -> COMPLETED)', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+
+      const token = generateToken(teamLeadUser);
+      const response = await request(app)
+        .patch('/api/requirements/req-uuid-1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          status: RequirementStatus.COMPLETED,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid status transition from DRAFT to COMPLETED');
     });
 
     it('should return 400 if no fields are provided', async () => {
