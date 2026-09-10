@@ -18,6 +18,11 @@ vi.mock('../src/lib/prisma', () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    requirementVersion: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -77,10 +82,24 @@ describe('Requirement API', () => {
     type: RequirementType.FUNCTIONAL,
     priority: RequirementPriority.HIGH,
     status: RequirementStatus.DRAFT,
+    version: 1,
     projectId: 'proj-uuid-1',
     project: mockProjectWithTeam,
     createdAt: new Date(),
     updatedAt: new Date(),
+    versions: [
+      {
+        id: 'ver-uuid-1',
+        versionNumber: 1,
+        title: 'User Authentication',
+        description: 'System must allow users to register and login using JWT tokens',
+        type: RequirementType.FUNCTIONAL,
+        priority: RequirementPriority.HIGH,
+        status: RequirementStatus.DRAFT,
+        requirementId: 'req-uuid-1',
+        createdAt: new Date(),
+      },
+    ],
   };
 
   const mockNonFunctionalRequirement = {
@@ -90,10 +109,24 @@ describe('Requirement API', () => {
     type: RequirementType.NON_FUNCTIONAL,
     priority: RequirementPriority.MEDIUM,
     status: RequirementStatus.IN_REVIEW,
+    version: 1,
     projectId: 'proj-uuid-1',
     project: mockProjectWithTeam,
     createdAt: new Date(),
     updatedAt: new Date(),
+    versions: [
+      {
+        id: 'ver-uuid-2',
+        versionNumber: 1,
+        title: 'Response Time Performance',
+        description: 'API response times should not exceed 200ms under 500 concurrent users',
+        type: RequirementType.NON_FUNCTIONAL,
+        priority: RequirementPriority.MEDIUM,
+        status: RequirementStatus.IN_REVIEW,
+        requirementId: 'req-uuid-2',
+        createdAt: new Date(),
+      },
+    ],
   };
 
   describe('POST /api/projects/:projectId/requirements - Create Requirement', () => {
@@ -208,7 +241,7 @@ describe('Requirement API', () => {
       expect(response.body.error).toContain('Invalid requirement status');
     });
 
-    it('should allow project team member to create a requirement with explicit priority and status', async () => {
+    it('should allow project team member to create a requirement with initial snapshot (v1)', async () => {
       (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
       (prisma.requirement.create as any).mockResolvedValue(mockFunctionalRequirement);
 
@@ -230,6 +263,7 @@ describe('Requirement API', () => {
       expect(response.body.data.type).toBe(RequirementType.FUNCTIONAL);
       expect(response.body.data.priority).toBe(RequirementPriority.HIGH);
       expect(response.body.data.status).toBe(RequirementStatus.DRAFT);
+      expect(response.body.data.version).toBe(1);
       expect(prisma.requirement.create).toHaveBeenCalledWith({
         data: {
           title: 'User Authentication',
@@ -237,12 +271,26 @@ describe('Requirement API', () => {
           type: RequirementType.FUNCTIONAL,
           priority: RequirementPriority.HIGH,
           status: RequirementStatus.DRAFT,
+          version: 1,
           projectId: 'proj-uuid-1',
+          versions: {
+            create: {
+              versionNumber: 1,
+              title: 'User Authentication',
+              description: 'System must allow users to register and login using JWT tokens',
+              type: RequirementType.FUNCTIONAL,
+              priority: RequirementPriority.HIGH,
+              status: RequirementStatus.DRAFT,
+            },
+          },
+        },
+        include: {
+          versions: true,
         },
       });
     });
 
-    it('should allow FACULTY to create a requirement with default priority and status', async () => {
+    it('should allow FACULTY to create a requirement with default priority, status, and v1 snapshot', async () => {
       (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
       (prisma.requirement.create as any).mockResolvedValue({
         ...mockNonFunctionalRequirement,
@@ -269,7 +317,21 @@ describe('Requirement API', () => {
           type: RequirementType.NON_FUNCTIONAL,
           priority: RequirementPriority.MEDIUM,
           status: RequirementStatus.DRAFT,
+          version: 1,
           projectId: 'proj-uuid-1',
+          versions: {
+            create: {
+              versionNumber: 1,
+              title: 'Response Time Performance',
+              description: 'API response times should not exceed 200ms under 500 concurrent users',
+              type: RequirementType.NON_FUNCTIONAL,
+              priority: RequirementPriority.MEDIUM,
+              status: RequirementStatus.DRAFT,
+            },
+          },
+        },
+        include: {
+          versions: true,
         },
       });
     });
@@ -357,12 +419,13 @@ describe('Requirement API', () => {
       expect(response.status).toBe(403);
     });
 
-    it('should allow updating priority and transitioning status through workflow (DRAFT -> IN_REVIEW)', async () => {
+    it('should increment version and create new version snapshot on update', async () => {
       (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
       const updatedReq = {
         ...mockFunctionalRequirement,
         priority: RequirementPriority.CRITICAL,
         status: RequirementStatus.IN_REVIEW,
+        version: 2,
       };
       (prisma.requirement.update as any).mockResolvedValue(updatedReq);
 
@@ -379,11 +442,28 @@ describe('Requirement API', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.priority).toBe(RequirementPriority.CRITICAL);
       expect(response.body.data.status).toBe(RequirementStatus.IN_REVIEW);
+      expect(response.body.data.version).toBe(2);
       expect(prisma.requirement.update).toHaveBeenCalledWith({
         where: { id: 'req-uuid-1' },
         data: {
           priority: RequirementPriority.CRITICAL,
           status: RequirementStatus.IN_REVIEW,
+          version: 2,
+          versions: {
+            create: {
+              versionNumber: 2,
+              title: mockFunctionalRequirement.title,
+              description: mockFunctionalRequirement.description,
+              type: mockFunctionalRequirement.type,
+              priority: RequirementPriority.CRITICAL,
+              status: RequirementStatus.IN_REVIEW,
+            },
+          },
+        },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+          },
         },
       });
     });
@@ -414,6 +494,149 @@ describe('Requirement API', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('At least one field must be provided');
+    });
+  });
+
+  describe('GET /api/requirements/:id/versions - Get Version History', () => {
+    it('should return 401 if unauthenticated', async () => {
+      const response = await request(app).get('/api/requirements/req-uuid-1/versions');
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 404 if requirement not found', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(null);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/requirements/nonexistent-req/versions')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 403 if user lacks access to the project', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+
+      const token = generateToken(outsiderUser);
+      const response = await request(app)
+        .get('/api/requirements/req-uuid-1/versions')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should return version list ordered by versionNumber desc', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+      const mockVersions = [
+        {
+          id: 'ver-uuid-2',
+          versionNumber: 2,
+          title: 'User Authentication (Updated)',
+          description: 'Updated description',
+          type: RequirementType.FUNCTIONAL,
+          priority: RequirementPriority.CRITICAL,
+          status: RequirementStatus.IN_REVIEW,
+          requirementId: 'req-uuid-1',
+          createdAt: new Date(),
+        },
+        {
+          id: 'ver-uuid-1',
+          versionNumber: 1,
+          title: 'User Authentication',
+          description: 'Initial description',
+          type: RequirementType.FUNCTIONAL,
+          priority: RequirementPriority.HIGH,
+          status: RequirementStatus.DRAFT,
+          requirementId: 'req-uuid-1',
+          createdAt: new Date(),
+        },
+      ];
+      (prisma.requirementVersion.findMany as any).mockResolvedValue(mockVersions);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/requirements/req-uuid-1/versions')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.length).toBe(2);
+      expect(response.body.data[0].versionNumber).toBe(2);
+      expect(response.body.data[1].versionNumber).toBe(1);
+      expect(prisma.requirementVersion.findMany).toHaveBeenCalledWith({
+        where: { requirementId: 'req-uuid-1' },
+        orderBy: { versionNumber: 'desc' },
+      });
+    });
+  });
+
+  describe('GET /api/requirements/:id/versions/:versionNumber - Get Specific Version Snapshot', () => {
+    it('should return 400 for invalid version numbers', async () => {
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/requirements/req-uuid-1/versions/abc')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid version number');
+    });
+
+    it('should return 404 if requirement does not exist', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(null);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/requirements/nonexistent-req/versions/1')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 404 if specific version snapshot is not found', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+      (prisma.requirementVersion.findUnique as any).mockResolvedValue(null);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/requirements/req-uuid-1/versions/99')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toContain('Requirement version 99 not found');
+    });
+
+    it('should return 200 with the version snapshot', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+      const mockSnapshot = {
+        id: 'ver-uuid-1',
+        versionNumber: 1,
+        title: 'User Authentication',
+        description: 'System must allow users to register and login using JWT tokens',
+        type: RequirementType.FUNCTIONAL,
+        priority: RequirementPriority.HIGH,
+        status: RequirementStatus.DRAFT,
+        requirementId: 'req-uuid-1',
+        createdAt: new Date(),
+      };
+      (prisma.requirementVersion.findUnique as any).mockResolvedValue(mockSnapshot);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/requirements/req-uuid-1/versions/1')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.versionNumber).toBe(1);
+      expect(response.body.data.title).toBe('User Authentication');
+      expect(prisma.requirementVersion.findUnique).toHaveBeenCalledWith({
+        where: {
+          requirementId_versionNumber: {
+            requirementId: 'req-uuid-1',
+            versionNumber: 1,
+          },
+        },
+      });
     });
   });
 

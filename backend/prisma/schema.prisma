@@ -85,18 +85,36 @@ enum RequirementStatus {
 }
 
 model Requirement {
-  id          String              @id @default(uuid())
+  id          String               @id @default(uuid())
   title       String
   description String
-  type        RequirementType     @default(FUNCTIONAL)
-  priority    RequirementPriority @default(MEDIUM)
-  status      RequirementStatus   @default(DRAFT)
+  type        RequirementType      @default(FUNCTIONAL)
+  priority    RequirementPriority  @default(MEDIUM)
+  status      RequirementStatus    @default(DRAFT)
+  version     Int                  @default(1)
   projectId   String
-  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions    RequirementVersion[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   @@map("requirements")
+}
+
+model RequirementVersion {
+  id            String              @id @default(uuid())
+  versionNumber Int
+  title         String
+  description   String
+  type          RequirementType
+  priority      RequirementPriority
+  status        RequirementStatus
+  requirementId String
+  requirement   Requirement         @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  createdAt     DateTime            @default(now())
+
+  @@unique([requirementId, versionNumber])
+  @@map("requirement_versions")
 }
 
 model Team {
