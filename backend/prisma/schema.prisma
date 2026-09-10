@@ -37,6 +37,7 @@ model Project {
   teamId      String?      @unique
   team        Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
   milestones  Milestone[]
+  requirements Requirement[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -61,6 +62,24 @@ model Milestone {
   updatedAt   DateTime        @updatedAt
 
   @@map("milestones")
+}
+
+enum RequirementType {
+  FUNCTIONAL
+  NON_FUNCTIONAL
+}
+
+model Requirement {
+  id          String          @id @default(uuid())
+  title       String
+  description String
+  type        RequirementType @default(FUNCTIONAL)
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("requirements")
 }
 
 model Team {

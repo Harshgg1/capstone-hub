@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ProjectController } from '../controllers/project.controller';
 import { MilestoneController } from '../controllers/milestone.controller';
+import { RequirementController } from '../controllers/requirement.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -31,6 +32,10 @@ router.patch('/:id/members/:userId', ProjectController.updateMemberRole);
 // Milestone routes on project
 router.get('/:projectId/milestones', MilestoneController.getMilestones);
 router.post('/:projectId/milestones', MilestoneController.createMilestone);
+
+// Requirement routes on project
+router.get('/:projectId/requirements', RequirementController.getRequirements);
+router.post('/:projectId/requirements', RequirementController.createRequirement);
 
 export default router;
 
