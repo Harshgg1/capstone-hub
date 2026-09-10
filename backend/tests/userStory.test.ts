@@ -179,6 +179,7 @@ describe('User Story API', () => {
           title: 'User Registration Story',
           description: 'As a student, I want to register so that I can join my capstone project team',
           status: UserStoryStatus.TODO,
+          order: 0,
           projectId: 'proj-uuid-1',
         },
       });
@@ -207,6 +208,7 @@ describe('User Story API', () => {
           title: 'User Login Story',
           description: 'As a user, I want to authenticate so that I can access my projects',
           status: UserStoryStatus.IN_PROGRESS,
+          order: 0,
           projectId: 'proj-uuid-1',
         },
       });
@@ -234,7 +236,7 @@ describe('User Story API', () => {
       expect(response.body.data.length).toBe(2);
       expect(prisma.userStory.findMany).toHaveBeenCalledWith({
         where: { projectId: 'proj-uuid-1' },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
       });
     });
 
@@ -254,7 +256,7 @@ describe('User Story API', () => {
           projectId: 'proj-uuid-1',
           status: UserStoryStatus.IN_PROGRESS,
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
       });
     });
   });

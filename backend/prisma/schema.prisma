@@ -131,6 +131,7 @@ model UserStory {
   title       String
   description String?
   status      UserStoryStatus @default(TODO)
+  order       Int             @default(0)
   projectId   String
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt   DateTime        @default(now())

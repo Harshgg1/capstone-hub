@@ -5,6 +5,7 @@ import projectRoutes from './project.routes';
 import milestoneRoutes from './milestone.routes';
 import requirementRoutes from './requirement.routes';
 import userStoryRoutes from './userStory.routes';
+import backlogRoutes from './backlog.routes';
 
 const apiRouter = Router();
 
@@ -15,5 +16,7 @@ apiRouter.use('/milestones', milestoneRoutes);
 apiRouter.use('/requirements', requirementRoutes);
 apiRouter.use('/stories', userStoryRoutes);
 apiRouter.use('/user-stories', userStoryRoutes);
+apiRouter.use('/backlog', backlogRoutes);
+apiRouter.use('/product-backlog', backlogRoutes);
 
 export default apiRouter;

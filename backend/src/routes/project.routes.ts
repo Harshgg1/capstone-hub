@@ -3,6 +3,7 @@ import { ProjectController } from '../controllers/project.controller';
 import { MilestoneController } from '../controllers/milestone.controller';
 import { RequirementController } from '../controllers/requirement.controller';
 import { UserStoryController } from '../controllers/userStory.controller';
+import { BacklogController } from '../controllers/backlog.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -43,6 +44,16 @@ router.get('/:projectId/stories', UserStoryController.getUserStories);
 router.post('/:projectId/stories', UserStoryController.createUserStory);
 router.get('/:projectId/user-stories', UserStoryController.getUserStories);
 router.post('/:projectId/user-stories', UserStoryController.createUserStory);
+
+// Product Backlog routes on project
+router.get('/:projectId/backlog', BacklogController.getProjectBacklog);
+router.post('/:projectId/backlog', BacklogController.addStoryToBacklog);
+router.put('/:projectId/backlog/reorder', BacklogController.reorderBacklog);
+router.patch('/:projectId/backlog/reorder', BacklogController.reorderBacklog);
+router.get('/:projectId/product-backlog', BacklogController.getProjectBacklog);
+router.post('/:projectId/product-backlog', BacklogController.addStoryToBacklog);
+router.put('/:projectId/product-backlog/reorder', BacklogController.reorderBacklog);
+router.patch('/:projectId/product-backlog/reorder', BacklogController.reorderBacklog);
 
 export default router;
 

@@ -6,12 +6,14 @@ export interface CreateUserStoryDTO {
   title: string;
   description?: string | null;
   status?: UserStoryStatus;
+  order?: number;
 }
 
 export interface UpdateUserStoryDTO {
   title?: string;
   description?: string | null;
   status?: UserStoryStatus;
+  order?: number;
 }
 
 export interface UserStoryQueryDTO {
@@ -80,7 +82,7 @@ export class UserStoryService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const { title, description, status } = data;
+    const { title, description, status, order } = data;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new AppError('User story title is required', 400);
@@ -97,11 +99,20 @@ export class UserStoryService {
       storyStatus = status;
     }
 
+    let storyOrder = 0;
+    if (order !== undefined) {
+      if (typeof order !== 'number' || isNaN(order)) {
+        throw new AppError('Invalid order number', 400);
+      }
+      storyOrder = order;
+    }
+
     return prisma.userStory.create({
       data: {
         title: title.trim(),
         description: description ? description.trim() : null,
         status: storyStatus,
+        order: storyOrder,
         projectId: project.id,
       },
     });
@@ -157,7 +168,7 @@ export class UserStoryService {
 
     return prisma.userStory.findMany({
       where,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
@@ -237,6 +248,7 @@ export class UserStoryService {
       title?: string;
       description?: string | null;
       status?: UserStoryStatus;
+      order?: number;
     } = {};
 
     if (data.title !== undefined) {
@@ -258,6 +270,13 @@ export class UserStoryService {
         );
       }
       updateData.status = data.status;
+    }
+
+    if (data.order !== undefined) {
+      if (typeof data.order !== 'number' || isNaN(data.order)) {
+        throw new AppError('Invalid order number', 400);
+      }
+      updateData.order = data.order;
     }
 
     if (Object.keys(updateData).length === 0) {
