@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ProjectController } from '../controllers/project.controller';
 import { MilestoneController } from '../controllers/milestone.controller';
 import { RequirementController } from '../controllers/requirement.controller';
+import { UserStoryController } from '../controllers/userStory.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -36,6 +37,12 @@ router.post('/:projectId/milestones', MilestoneController.createMilestone);
 // Requirement routes on project
 router.get('/:projectId/requirements', RequirementController.getRequirements);
 router.post('/:projectId/requirements', RequirementController.createRequirement);
+
+// User Story routes on project
+router.get('/:projectId/stories', UserStoryController.getUserStories);
+router.post('/:projectId/stories', UserStoryController.createUserStory);
+router.get('/:projectId/user-stories', UserStoryController.getUserStories);
+router.post('/:projectId/user-stories', UserStoryController.createUserStory);
 
 export default router;
 
