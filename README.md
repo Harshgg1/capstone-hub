@@ -146,16 +146,15 @@ flowchart LR
         UC6[Assign Tasks]
         UC7[Manage Bugs]
         UC8[Manage Project]
-
-        UC9[Work on Tasks]
-        UC10[Update Progress]
-        UC11[Resolve Bugs]
-        UC12[Contribute Documentation]
-
         UC13[Manage Requirements]
         UC14[Manage Sprints]
         UC15[Manage Deliverables]
+
+        UC9[Work on Tasks]
+        UC10[Update Progress]
         UC16[View GitHub Activity]
+        UC11[Resolve Bugs]
+        UC12[Contribute Documentation]
     end
 
     Faculty --> UC1
@@ -174,9 +173,10 @@ flowchart LR
 
     Member --> UC9
     Member --> UC10
+    Member --> UC16
     Member --> UC11
     Member --> UC12
-    Member --> UC16
+
 ```
 
 ### 2. Class Diagram
@@ -382,7 +382,7 @@ flowchart TB
 
     PRISMA --> DB
 
-    GH <--> GITHUB``mermaid
+    GH <--> GITHUB
 ```
 
 ### 6. Development Traceability
