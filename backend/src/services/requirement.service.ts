@@ -8,6 +8,7 @@ export interface CreateRequirementDTO {
   type?: RequirementType;
   priority?: RequirementPriority;
   status?: RequirementStatus;
+  reviewFeedback?: string;
 }
 
 export interface UpdateRequirementDTO {
@@ -16,12 +17,19 @@ export interface UpdateRequirementDTO {
   type?: RequirementType;
   priority?: RequirementPriority;
   status?: RequirementStatus;
+  reviewFeedback?: string;
 }
 
 export interface RequirementQueryDTO {
   type?: RequirementType;
   priority?: RequirementPriority;
   status?: RequirementStatus;
+}
+
+export interface ReviewRequirementDTO {
+  action?: 'APPROVE' | 'REJECT';
+  status?: RequirementStatus;
+  feedback?: string;
 }
 
 /**
@@ -88,6 +96,16 @@ export class RequirementService {
   }
 
   /**
+   * Helper to check if a user is FACULTY or the assigned faculty advisor of the project.
+   */
+  private static isFacultyUser(
+    user: { id: string; role: Role },
+    project: { facultyId: string | null }
+  ): boolean {
+    return user.role === Role.FACULTY || project.facultyId === user.id;
+  }
+
+  /**
    * Create a requirement for a project with initial version snapshot (v1).
    */
   public static async createRequirement(
@@ -118,7 +136,7 @@ export class RequirementService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const { title, description, type, priority, status } = data;
+    const { title, description, type, priority, status, reviewFeedback } = data;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new AppError('Requirement title is required', 400);
@@ -158,8 +176,16 @@ export class RequirementService {
           400
         );
       }
+      if (
+        (status === RequirementStatus.APPROVED || status === RequirementStatus.REJECTED) &&
+        !this.isFacultyUser(user, project)
+      ) {
+        throw new AppError('Access denied: only faculty can create approved or rejected requirements', 403);
+      }
       requirementStatus = status;
     }
+
+    const feedbackText = reviewFeedback ? reviewFeedback.trim() : null;
 
     return prisma.requirement.create({
       data: {
@@ -168,6 +194,7 @@ export class RequirementService {
         type: requirementType,
         priority: requirementPriority,
         status: requirementStatus,
+        reviewFeedback: feedbackText,
         version: 1,
         projectId: project.id,
         versions: {
@@ -178,6 +205,7 @@ export class RequirementService {
             type: requirementType,
             priority: requirementPriority,
             status: requirementStatus,
+            reviewFeedback: feedbackText,
           },
         },
       },
@@ -344,6 +372,7 @@ export class RequirementService {
       type?: RequirementType;
       priority?: RequirementPriority;
       status?: RequirementStatus;
+      reviewFeedback?: string | null;
     } = {};
 
     if (data.title !== undefined) {
@@ -400,7 +429,19 @@ export class RequirementService {
         );
       }
 
+      // Enforce faculty-only permissions for approval and rejection
+      if (
+        (newStatus === RequirementStatus.APPROVED || newStatus === RequirementStatus.REJECTED) &&
+        !this.isFacultyUser(user, requirement.project)
+      ) {
+        throw new AppError('Access denied: only faculty can approve or reject requirements', 403);
+      }
+
       updateData.status = newStatus;
+    }
+
+    if (data.reviewFeedback !== undefined) {
+      updateData.reviewFeedback = data.reviewFeedback ? data.reviewFeedback.trim() : null;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -413,6 +454,7 @@ export class RequirementService {
     const finalType = updateData.type ?? requirement.type;
     const finalPriority = updateData.priority ?? requirement.priority;
     const finalStatus = updateData.status ?? requirement.status;
+    const finalReviewFeedback = updateData.reviewFeedback !== undefined ? updateData.reviewFeedback : requirement.reviewFeedback;
 
     return prisma.requirement.update({
       where: { id: requirement.id },
@@ -427,6 +469,7 @@ export class RequirementService {
             type: finalType,
             priority: finalPriority,
             status: finalStatus,
+            reviewFeedback: finalReviewFeedback,
           },
         },
       },
@@ -436,6 +479,203 @@ export class RequirementService {
         },
       },
     });
+  }
+
+  /**
+   * Submit a requirement for faculty review.
+   * Allowed for team members/leads and faculty associated with the project.
+   * Transitions from DRAFT or REJECTED to IN_REVIEW.
+   */
+  public static async submitRequirement(
+    requirementId: string,
+    user: { id: string; role: Role }
+  ) {
+    if (!requirementId || typeof requirementId !== 'string' || !requirementId.trim()) {
+      throw new AppError('Requirement ID is required', 400);
+    }
+
+    const requirement = await prisma.requirement.findUnique({
+      where: { id: requirementId.trim() },
+      include: {
+        project: {
+          include: {
+            team: {
+              include: {
+                members: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!requirement) {
+      throw new AppError('Requirement not found', 404);
+    }
+
+    if (!this.canAccessProject(user, requirement.project)) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    if (
+      requirement.status !== RequirementStatus.DRAFT &&
+      requirement.status !== RequirementStatus.REJECTED
+    ) {
+      throw new AppError(
+        `Cannot submit requirement with status ${requirement.status}. Only DRAFT or REJECTED requirements can be submitted for review.`,
+        400
+      );
+    }
+
+    const nextVersionNumber = requirement.version + 1;
+    const newStatus = RequirementStatus.IN_REVIEW;
+
+    return prisma.requirement.update({
+      where: { id: requirement.id },
+      data: {
+        status: newStatus,
+        version: nextVersionNumber,
+        versions: {
+          create: {
+            versionNumber: nextVersionNumber,
+            title: requirement.title,
+            description: requirement.description,
+            type: requirement.type,
+            priority: requirement.priority,
+            status: newStatus,
+            reviewFeedback: requirement.reviewFeedback,
+          },
+        },
+      },
+      include: {
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+        },
+      },
+    });
+  }
+
+  /**
+   * Review a requirement (approve or reject with optional feedback).
+   * Only accessible to FACULTY users or the assigned faculty advisor.
+   */
+  public static async reviewRequirement(
+    requirementId: string,
+    data: ReviewRequirementDTO,
+    user: { id: string; role: Role }
+  ) {
+    if (!requirementId || typeof requirementId !== 'string' || !requirementId.trim()) {
+      throw new AppError('Requirement ID is required', 400);
+    }
+
+    const requirement = await prisma.requirement.findUnique({
+      where: { id: requirementId.trim() },
+      include: {
+        project: {
+          include: {
+            team: {
+              include: {
+                members: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!requirement) {
+      throw new AppError('Requirement not found', 404);
+    }
+
+    if (!this.canAccessProject(user, requirement.project)) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    if (!this.isFacultyUser(user, requirement.project)) {
+      throw new AppError('Access denied: only faculty can review requirements', 403);
+    }
+
+    let targetStatus: RequirementStatus;
+    if (data.status) {
+      if (
+        data.status !== RequirementStatus.APPROVED &&
+        data.status !== RequirementStatus.REJECTED
+      ) {
+        throw new AppError('Invalid review status. Allowed: APPROVED, REJECTED', 400);
+      }
+      targetStatus = data.status;
+    } else if (data.action) {
+      const normalizedAction = data.action.toUpperCase();
+      if (normalizedAction === 'APPROVE') {
+        targetStatus = RequirementStatus.APPROVED;
+      } else if (normalizedAction === 'REJECT') {
+        targetStatus = RequirementStatus.REJECTED;
+      } else {
+        throw new AppError('Invalid review action. Allowed: APPROVE, REJECT', 400);
+      }
+    } else {
+      throw new AppError('Review action or status is required (APPROVE or REJECT)', 400);
+    }
+
+    const currentStatus = requirement.status;
+    const allowedNext = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
+
+    if (!allowedNext.includes(targetStatus)) {
+      throw new AppError(
+        `Invalid status transition from ${currentStatus} to ${targetStatus}`,
+        400
+      );
+    }
+
+    const feedbackText = data.feedback !== undefined ? (data.feedback ? data.feedback.trim() : null) : requirement.reviewFeedback;
+    const nextVersionNumber = requirement.version + 1;
+
+    return prisma.requirement.update({
+      where: { id: requirement.id },
+      data: {
+        status: targetStatus,
+        reviewFeedback: feedbackText,
+        version: nextVersionNumber,
+        versions: {
+          create: {
+            versionNumber: nextVersionNumber,
+            title: requirement.title,
+            description: requirement.description,
+            type: requirement.type,
+            priority: requirement.priority,
+            status: targetStatus,
+            reviewFeedback: feedbackText,
+          },
+        },
+      },
+      include: {
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+        },
+      },
+    });
+  }
+
+  /**
+   * Approve a requirement with optional feedback.
+   */
+  public static async approveRequirement(
+    requirementId: string,
+    feedback: string | undefined,
+    user: { id: string; role: Role }
+  ) {
+    return this.reviewRequirement(requirementId, { action: 'APPROVE', feedback }, user);
+  }
+
+  /**
+   * Reject a requirement with optional feedback.
+   */
+  public static async rejectRequirement(
+    requirementId: string,
+    feedback: string | undefined,
+    user: { id: string; role: Role }
+  ) {
+    return this.reviewRequirement(requirementId, { action: 'REJECT', feedback }, user);
   }
 
   /**
