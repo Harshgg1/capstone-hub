@@ -46,8 +46,7 @@ export const ALLOWED_STATUS_TRANSITIONS: Record<RequirementStatus, RequirementSt
   ],
   [RequirementStatus.REJECTED]: [
     RequirementStatus.REJECTED,
-    RequirementStatus.DRAFT,
-    RequirementStatus.IN_REVIEW,
+    RequirementStatus.COMPLETED,
   ],
   [RequirementStatus.COMPLETED]: [
     RequirementStatus.COMPLETED,
