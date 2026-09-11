@@ -87,7 +87,7 @@ export class RequirementService {
   }
 
   /**
-   * Create a requirement for a project with optional priority and status.
+   * Create a requirement for a project with initial version snapshot (v1).
    */
   public static async createRequirement(
     projectId: string,
@@ -167,7 +167,21 @@ export class RequirementService {
         type: requirementType,
         priority: requirementPriority,
         status: requirementStatus,
+        version: 1,
         projectId: project.id,
+        versions: {
+          create: {
+            versionNumber: 1,
+            title: title.trim(),
+            description: description.trim(),
+            type: requirementType,
+            priority: requirementPriority,
+            status: requirementStatus,
+          },
+        },
+      },
+      include: {
+        versions: true,
       },
     });
   }
@@ -271,6 +285,9 @@ export class RequirementService {
             },
           },
         },
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+        },
       },
     });
 
@@ -286,7 +303,7 @@ export class RequirementService {
   }
 
   /**
-   * Update a requirement by ID with priority and status workflow validation.
+   * Update a requirement by ID with automatic version increment and snapshot persistence.
    */
   public static async updateRequirement(
     requirementId: string,
@@ -389,10 +406,130 @@ export class RequirementService {
       throw new AppError('At least one field must be provided to update', 400);
     }
 
+    const nextVersionNumber = requirement.version + 1;
+    const finalTitle = updateData.title ?? requirement.title;
+    const finalDescription = updateData.description ?? requirement.description;
+    const finalType = updateData.type ?? requirement.type;
+    const finalPriority = updateData.priority ?? requirement.priority;
+    const finalStatus = updateData.status ?? requirement.status;
+
     return prisma.requirement.update({
       where: { id: requirement.id },
-      data: updateData,
+      data: {
+        ...updateData,
+        version: nextVersionNumber,
+        versions: {
+          create: {
+            versionNumber: nextVersionNumber,
+            title: finalTitle,
+            description: finalDescription,
+            type: finalType,
+            priority: finalPriority,
+            status: finalStatus,
+          },
+        },
+      },
+      include: {
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+        },
+      },
     });
+  }
+
+  /**
+   * Get all version snapshots of a requirement.
+   */
+  public static async getRequirementVersions(
+    requirementId: string,
+    user?: { id: string; role: Role }
+  ) {
+    if (!requirementId || typeof requirementId !== 'string' || !requirementId.trim()) {
+      throw new AppError('Requirement ID is required', 400);
+    }
+
+    const requirement = await prisma.requirement.findUnique({
+      where: { id: requirementId.trim() },
+      include: {
+        project: {
+          include: {
+            team: {
+              include: {
+                members: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!requirement) {
+      throw new AppError('Requirement not found', 404);
+    }
+
+    if (user && !this.canAccessProject(user, requirement.project)) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    return prisma.requirementVersion.findMany({
+      where: { requirementId: requirement.id },
+      orderBy: { versionNumber: 'desc' },
+    });
+  }
+
+  /**
+   * Get a specific version snapshot of a requirement by version number.
+   */
+  public static async getRequirementVersionByNumber(
+    requirementId: string,
+    versionNumber: number,
+    user?: { id: string; role: Role }
+  ) {
+    if (!requirementId || typeof requirementId !== 'string' || !requirementId.trim()) {
+      throw new AppError('Requirement ID is required', 400);
+    }
+
+    if (isNaN(versionNumber) || versionNumber < 1) {
+      throw new AppError('Invalid version number', 400);
+    }
+
+    const requirement = await prisma.requirement.findUnique({
+      where: { id: requirementId.trim() },
+      include: {
+        project: {
+          include: {
+            team: {
+              include: {
+                members: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!requirement) {
+      throw new AppError('Requirement not found', 404);
+    }
+
+    if (user && !this.canAccessProject(user, requirement.project)) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    const version = await prisma.requirementVersion.findUnique({
+      where: {
+        requirementId_versionNumber: {
+          requirementId: requirement.id,
+          versionNumber,
+        },
+      },
+    });
+
+    if (!version) {
+      throw new AppError(`Requirement version ${versionNumber} not found`, 404);
+    }
+
+    return version;
   }
 
   /**

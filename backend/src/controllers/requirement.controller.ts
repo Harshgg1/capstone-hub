@@ -132,4 +132,57 @@ export class RequirementController {
       next(error);
     }
   }
+
+  /**
+   * Get all version snapshots of a requirement.
+   */
+  public static async getRequirementVersions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const versions = await RequirementService.getRequirementVersions(id, req.user);
+      res.status(200).json({
+        success: true,
+        data: versions,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Get a specific version snapshot of a requirement by version number.
+   */
+  public static async getRequirementVersionByNumber(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id, versionNumber } = req.params;
+      const version = await RequirementService.getRequirementVersionByNumber(
+        id,
+        parseInt(versionNumber, 10),
+        req.user
+      );
+      res.status(200).json({
+        success: true,
+        data: version,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
 }
+
