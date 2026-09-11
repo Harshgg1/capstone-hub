@@ -1,0 +1,129 @@
+import { Request, Response, NextFunction } from 'express';
+import { RequirementService } from '../services/requirement.service';
+import { RequirementType } from '@prisma/client';
+import { AppError } from '../middleware/errorHandler';
+
+export class RequirementController {
+  /**
+   * Create a requirement for a project.
+   */
+  public static async createRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const projectId = req.params.projectId || req.body.projectId;
+      const requirement = await RequirementService.createRequirement(projectId, req.body, req.user);
+      res.status(201).json({
+        success: true,
+        message: 'Requirement created successfully',
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Get all requirements for a project.
+   */
+  public static async getRequirements(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { projectId } = req.params;
+      const type = req.query.type as RequirementType | undefined;
+      const requirements = await RequirementService.getRequirementsByProjectId(projectId, { type }, req.user);
+      res.status(200).json({
+        success: true,
+        data: requirements,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Get requirement by ID.
+   */
+  public static async getRequirementById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const requirement = await RequirementService.getRequirementById(id, req.user);
+      res.status(200).json({
+        success: true,
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Update requirement by ID.
+   */
+  public static async updateRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const requirement = await RequirementService.updateRequirement(id, req.body, req.user);
+      res.status(200).json({
+        success: true,
+        message: 'Requirement updated successfully',
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Delete requirement by ID.
+   */
+  public static async deleteRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const result = await RequirementService.deleteRequirement(id, req.user);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+}
