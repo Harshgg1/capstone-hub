@@ -82,6 +82,7 @@ describe('Requirement API', () => {
     type: RequirementType.FUNCTIONAL,
     priority: RequirementPriority.HIGH,
     status: RequirementStatus.DRAFT,
+    reviewFeedback: null,
     version: 1,
     projectId: 'proj-uuid-1',
     project: mockProjectWithTeam,
@@ -96,6 +97,7 @@ describe('Requirement API', () => {
         type: RequirementType.FUNCTIONAL,
         priority: RequirementPriority.HIGH,
         status: RequirementStatus.DRAFT,
+        reviewFeedback: null,
         requirementId: 'req-uuid-1',
         createdAt: new Date(),
       },
@@ -109,6 +111,7 @@ describe('Requirement API', () => {
     type: RequirementType.NON_FUNCTIONAL,
     priority: RequirementPriority.MEDIUM,
     status: RequirementStatus.IN_REVIEW,
+    reviewFeedback: null,
     version: 1,
     projectId: 'proj-uuid-1',
     project: mockProjectWithTeam,
@@ -123,6 +126,7 @@ describe('Requirement API', () => {
         type: RequirementType.NON_FUNCTIONAL,
         priority: RequirementPriority.MEDIUM,
         status: RequirementStatus.IN_REVIEW,
+        reviewFeedback: null,
         requirementId: 'req-uuid-2',
         createdAt: new Date(),
       },
@@ -271,6 +275,7 @@ describe('Requirement API', () => {
           type: RequirementType.FUNCTIONAL,
           priority: RequirementPriority.HIGH,
           status: RequirementStatus.DRAFT,
+          reviewFeedback: null,
           version: 1,
           projectId: 'proj-uuid-1',
           versions: {
@@ -281,6 +286,7 @@ describe('Requirement API', () => {
               type: RequirementType.FUNCTIONAL,
               priority: RequirementPriority.HIGH,
               status: RequirementStatus.DRAFT,
+              reviewFeedback: null,
             },
           },
         },
@@ -317,6 +323,7 @@ describe('Requirement API', () => {
           type: RequirementType.NON_FUNCTIONAL,
           priority: RequirementPriority.MEDIUM,
           status: RequirementStatus.DRAFT,
+          reviewFeedback: null,
           version: 1,
           projectId: 'proj-uuid-1',
           versions: {
@@ -327,6 +334,7 @@ describe('Requirement API', () => {
               type: RequirementType.NON_FUNCTIONAL,
               priority: RequirementPriority.MEDIUM,
               status: RequirementStatus.DRAFT,
+              reviewFeedback: null,
             },
           },
         },
@@ -457,6 +465,7 @@ describe('Requirement API', () => {
               type: mockFunctionalRequirement.type,
               priority: RequirementPriority.CRITICAL,
               status: RequirementStatus.IN_REVIEW,
+              reviewFeedback: null,
             },
           },
         },
@@ -466,6 +475,51 @@ describe('Requirement API', () => {
           },
         },
       });
+    });
+
+    it('should reject non-faculty attempt to transition status to APPROVED or REJECTED', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+
+      const token = generateToken(teamLeadUser);
+      const response = await request(app)
+        .patch('/api/requirements/req-uuid-1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          status: RequirementStatus.APPROVED,
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain('only faculty can approve or reject');
+    });
+
+    it('should allow FACULTY to approve requirement with feedback via update', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+      const updatedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.APPROVED,
+        reviewFeedback: 'Approved after verification',
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(updatedReq);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .patch('/api/requirements/req-uuid-1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          status: RequirementStatus.APPROVED,
+          reviewFeedback: 'Approved after verification',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.status).toBe(RequirementStatus.APPROVED);
     });
 
     it('should reject invalid status workflow transition (DRAFT -> COMPLETED)', async () => {
@@ -494,6 +548,299 @@ describe('Requirement API', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('At least one field must be provided');
+    });
+  });
+
+  describe('POST /api/requirements/:id/submit - Submit Requirement for Review', () => {
+    it('should return 401 if unauthenticated', async () => {
+      const response = await request(app).post('/api/requirements/req-uuid-1/submit');
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 404 if requirement not found', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(null);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/requirements/nonexistent-req/submit')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should return 403 if outsider attempts submission', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+
+      const token = generateToken(outsiderUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/submit')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should return 400 if requirement status is already IN_REVIEW or APPROVED', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.APPROVED,
+      });
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/submit')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Only DRAFT or REJECTED requirements can be submitted');
+    });
+
+    it('should submit DRAFT requirement for review successfully', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue(mockFunctionalRequirement);
+      const submittedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(submittedReq);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/submit')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('submitted for review');
+      expect(response.body.data.status).toBe(RequirementStatus.IN_REVIEW);
+      expect(prisma.requirement.update).toHaveBeenCalledWith({
+        where: { id: 'req-uuid-1' },
+        data: {
+          status: RequirementStatus.IN_REVIEW,
+          version: 2,
+          versions: {
+            create: {
+              versionNumber: 2,
+              title: mockFunctionalRequirement.title,
+              description: mockFunctionalRequirement.description,
+              type: mockFunctionalRequirement.type,
+              priority: mockFunctionalRequirement.priority,
+              status: RequirementStatus.IN_REVIEW,
+              reviewFeedback: null,
+            },
+          },
+        },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+          },
+        },
+      });
+    });
+
+    it('should allow resubmitting a REJECTED requirement for review', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.REJECTED,
+      });
+      const submittedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(submittedReq);
+
+      const token = generateToken(teamLeadUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/submit')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.status).toBe(RequirementStatus.IN_REVIEW);
+    });
+  });
+
+  describe('POST /api/requirements/:id/review - Faculty Review Requirement', () => {
+    it('should return 401 if unauthenticated', async () => {
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/review')
+        .send({ action: 'APPROVE' });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 403 if non-faculty (team member/lead) attempts review', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+
+      const token = generateToken(teamLeadUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/review')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'APPROVE' });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain('only faculty can review');
+    });
+
+    it('should return 400 for invalid review action', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/review')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'INVALID_ACTION' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid review action');
+    });
+
+    it('should allow faculty to APPROVE requirement with feedback', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+      const approvedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.APPROVED,
+        reviewFeedback: 'Looks complete and well specified.',
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(approvedReq);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/review')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'APPROVE', feedback: 'Looks complete and well specified.' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.status).toBe(RequirementStatus.APPROVED);
+      expect(response.body.data.reviewFeedback).toBe('Looks complete and well specified.');
+      expect(prisma.requirement.update).toHaveBeenCalledWith({
+        where: { id: 'req-uuid-1' },
+        data: {
+          status: RequirementStatus.APPROVED,
+          reviewFeedback: 'Looks complete and well specified.',
+          version: 2,
+          versions: {
+            create: {
+              versionNumber: 2,
+              title: mockFunctionalRequirement.title,
+              description: mockFunctionalRequirement.description,
+              type: mockFunctionalRequirement.type,
+              priority: mockFunctionalRequirement.priority,
+              status: RequirementStatus.APPROVED,
+              reviewFeedback: 'Looks complete and well specified.',
+            },
+          },
+        },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+          },
+        },
+      });
+    });
+
+    it('should allow faculty to REJECT requirement with feedback', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+      const rejectedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.REJECTED,
+        reviewFeedback: 'Please add acceptance criteria.',
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(rejectedReq);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/review')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'REJECT', feedback: 'Please add acceptance criteria.' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.status).toBe(RequirementStatus.REJECTED);
+      expect(response.body.data.reviewFeedback).toBe('Please add acceptance criteria.');
+    });
+  });
+
+  describe('POST /api/requirements/:id/approve & /reject shorthand endpoints', () => {
+    it('should approve requirement via /approve endpoint', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+      const approvedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.APPROVED,
+        reviewFeedback: 'Approved by advisor',
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(approvedReq);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/approve')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ feedback: 'Approved by advisor' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('approved successfully');
+      expect(response.body.data.status).toBe(RequirementStatus.APPROVED);
+    });
+
+    it('should reject requirement via /reject endpoint', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+      const rejectedReq = {
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.REJECTED,
+        reviewFeedback: 'Needs revisions',
+        version: 2,
+      };
+      (prisma.requirement.update as any).mockResolvedValue(rejectedReq);
+
+      const token = generateToken(facultyUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/reject')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ feedback: 'Needs revisions' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toContain('rejected successfully');
+      expect(response.body.data.status).toBe(RequirementStatus.REJECTED);
+    });
+
+    it('should reject non-faculty attempts on /approve endpoint', async () => {
+      (prisma.requirement.findUnique as any).mockResolvedValue({
+        ...mockFunctionalRequirement,
+        status: RequirementStatus.IN_REVIEW,
+      });
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/requirements/req-uuid-1/approve')
+        .set('Authorization', `Bearer ${token}`)
+        .send({});
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain('only faculty can review');
     });
   });
 
@@ -536,6 +883,7 @@ describe('Requirement API', () => {
           type: RequirementType.FUNCTIONAL,
           priority: RequirementPriority.CRITICAL,
           status: RequirementStatus.IN_REVIEW,
+          reviewFeedback: null,
           requirementId: 'req-uuid-1',
           createdAt: new Date(),
         },
@@ -547,6 +895,7 @@ describe('Requirement API', () => {
           type: RequirementType.FUNCTIONAL,
           priority: RequirementPriority.HIGH,
           status: RequirementStatus.DRAFT,
+          reviewFeedback: null,
           requirementId: 'req-uuid-1',
           createdAt: new Date(),
         },
@@ -615,6 +964,7 @@ describe('Requirement API', () => {
         type: RequirementType.FUNCTIONAL,
         priority: RequirementPriority.HIGH,
         status: RequirementStatus.DRAFT,
+        reviewFeedback: null,
         requirementId: 'req-uuid-1',
         createdAt: new Date(),
       };

@@ -184,5 +184,105 @@ export class RequirementController {
       next(error);
     }
   }
+
+  /**
+   * Submit a requirement for faculty review.
+   */
+  public static async submitRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const requirement = await RequirementService.submitRequirement(id, req.user);
+      res.status(200).json({
+        success: true,
+        message: 'Requirement submitted for review successfully',
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Review a requirement (approve or reject with optional feedback).
+   */
+  public static async reviewRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const requirement = await RequirementService.reviewRequirement(id, req.body, req.user);
+      res.status(200).json({
+        success: true,
+        message: 'Requirement reviewed successfully',
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Approve a requirement.
+   */
+  public static async approveRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const requirement = await RequirementService.approveRequirement(id, req.body?.feedback, req.user);
+      res.status(200).json({
+        success: true,
+        message: 'Requirement approved successfully',
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * Reject a requirement.
+   */
+  public static async rejectRequirement(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const requirement = await RequirementService.rejectRequirement(id, req.body?.feedback, req.user);
+      res.status(200).json({
+        success: true,
+        message: 'Requirement rejected successfully',
+        data: requirement,
+      });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
 }
 

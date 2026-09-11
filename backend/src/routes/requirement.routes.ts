@@ -11,6 +11,12 @@ router.use(authenticate);
 router.get('/:id/versions', RequirementController.getRequirementVersions);
 router.get('/:id/versions/:versionNumber', RequirementController.getRequirementVersionByNumber);
 
+// Requirement workflow & review
+router.post('/:id/submit', RequirementController.submitRequirement);
+router.post('/:id/review', RequirementController.reviewRequirement);
+router.post('/:id/approve', RequirementController.approveRequirement);
+router.post('/:id/reject', RequirementController.rejectRequirement);
+
 // Requirement CRUD
 router.post('/', RequirementController.createRequirement);
 router.get('/:id', RequirementController.getRequirementById);
