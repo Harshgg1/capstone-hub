@@ -1,4 +1,4 @@
-import { RequirementType, Role } from '@prisma/client';
+import { RequirementPriority, RequirementStatus, RequirementType, Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
@@ -6,13 +6,54 @@ export interface CreateRequirementDTO {
   title: string;
   description: string;
   type?: RequirementType;
+  priority?: RequirementPriority;
+  status?: RequirementStatus;
 }
 
 export interface UpdateRequirementDTO {
   title?: string;
   description?: string;
   type?: RequirementType;
+  priority?: RequirementPriority;
+  status?: RequirementStatus;
 }
+
+export interface RequirementQueryDTO {
+  type?: RequirementType;
+  priority?: RequirementPriority;
+  status?: RequirementStatus;
+}
+
+/**
+ * Valid state transitions for requirement status workflow
+ */
+export const ALLOWED_STATUS_TRANSITIONS: Record<RequirementStatus, RequirementStatus[]> = {
+  [RequirementStatus.DRAFT]: [
+    RequirementStatus.DRAFT,
+    RequirementStatus.IN_REVIEW,
+  ],
+  [RequirementStatus.IN_REVIEW]: [
+    RequirementStatus.IN_REVIEW,
+    RequirementStatus.APPROVED,
+    RequirementStatus.REJECTED,
+    RequirementStatus.DRAFT,
+  ],
+  [RequirementStatus.APPROVED]: [
+    RequirementStatus.APPROVED,
+    RequirementStatus.COMPLETED,
+    RequirementStatus.IN_REVIEW,
+    RequirementStatus.DRAFT,
+  ],
+  [RequirementStatus.REJECTED]: [
+    RequirementStatus.REJECTED,
+    RequirementStatus.COMPLETED,
+  ],
+  [RequirementStatus.COMPLETED]: [
+    RequirementStatus.COMPLETED,
+    RequirementStatus.APPROVED,
+    RequirementStatus.IN_REVIEW,
+  ],
+};
 
 export class RequirementService {
   /**
@@ -46,7 +87,7 @@ export class RequirementService {
   }
 
   /**
-   * Create a requirement for a project.
+   * Create a requirement for a project with optional priority and status.
    */
   public static async createRequirement(
     projectId: string,
@@ -76,7 +117,7 @@ export class RequirementService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const { title, description, type } = data;
+    const { title, description, type, priority, status } = data;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new AppError('Requirement title is required', 400);
@@ -97,22 +138,46 @@ export class RequirementService {
       requirementType = type;
     }
 
+    let requirementPriority: RequirementPriority = RequirementPriority.MEDIUM;
+    if (priority !== undefined) {
+      if (!Object.values(RequirementPriority).includes(priority)) {
+        throw new AppError(
+          `Invalid requirement priority. Allowed: ${Object.values(RequirementPriority).join(', ')}`,
+          400
+        );
+      }
+      requirementPriority = priority;
+    }
+
+    let requirementStatus: RequirementStatus = RequirementStatus.DRAFT;
+    if (status !== undefined) {
+      if (!Object.values(RequirementStatus).includes(status)) {
+        throw new AppError(
+          `Invalid requirement status. Allowed: ${Object.values(RequirementStatus).join(', ')}`,
+          400
+        );
+      }
+      requirementStatus = status;
+    }
+
     return prisma.requirement.create({
       data: {
         title: title.trim(),
         description: description.trim(),
         type: requirementType,
+        priority: requirementPriority,
+        status: requirementStatus,
         projectId: project.id,
       },
     });
   }
 
   /**
-   * Get all requirements for a project with optional type filtering.
+   * Get all requirements for a project with optional type, priority, and status filtering.
    */
   public static async getRequirementsByProjectId(
     projectId: string,
-    query?: { type?: RequirementType },
+    query?: RequirementQueryDTO,
     user?: { id: string; role: Role }
   ) {
     if (!projectId || typeof projectId !== 'string' || !projectId.trim()) {
@@ -138,7 +203,12 @@ export class RequirementService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const where: { projectId: string; type?: RequirementType } = {
+    const where: {
+      projectId: string;
+      type?: RequirementType;
+      priority?: RequirementPriority;
+      status?: RequirementStatus;
+    } = {
       projectId: project.id,
     };
 
@@ -150,6 +220,26 @@ export class RequirementService {
         );
       }
       where.type = query.type;
+    }
+
+    if (query?.priority) {
+      if (!Object.values(RequirementPriority).includes(query.priority)) {
+        throw new AppError(
+          `Invalid requirement priority. Allowed: ${Object.values(RequirementPriority).join(', ')}`,
+          400
+        );
+      }
+      where.priority = query.priority;
+    }
+
+    if (query?.status) {
+      if (!Object.values(RequirementStatus).includes(query.status)) {
+        throw new AppError(
+          `Invalid requirement status. Allowed: ${Object.values(RequirementStatus).join(', ')}`,
+          400
+        );
+      }
+      where.status = query.status;
     }
 
     return prisma.requirement.findMany({
@@ -196,7 +286,7 @@ export class RequirementService {
   }
 
   /**
-   * Update a requirement by ID.
+   * Update a requirement by ID with priority and status workflow validation.
    */
   public static async updateRequirement(
     requirementId: string,
@@ -234,6 +324,8 @@ export class RequirementService {
       title?: string;
       description?: string;
       type?: RequirementType;
+      priority?: RequirementPriority;
+      status?: RequirementStatus;
     } = {};
 
     if (data.title !== undefined) {
@@ -258,6 +350,39 @@ export class RequirementService {
         );
       }
       updateData.type = data.type;
+    }
+
+    if (data.priority !== undefined) {
+      if (!Object.values(RequirementPriority).includes(data.priority)) {
+        throw new AppError(
+          `Invalid requirement priority. Allowed: ${Object.values(RequirementPriority).join(', ')}`,
+          400
+        );
+      }
+      updateData.priority = data.priority;
+    }
+
+    if (data.status !== undefined) {
+      if (!Object.values(RequirementStatus).includes(data.status)) {
+        throw new AppError(
+          `Invalid requirement status. Allowed: ${Object.values(RequirementStatus).join(', ')}`,
+          400
+        );
+      }
+
+      // Enforce status workflow transitions
+      const currentStatus = requirement.status;
+      const newStatus = data.status;
+      const allowedNext = ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
+
+      if (!allowedNext.includes(newStatus)) {
+        throw new AppError(
+          `Invalid status transition from ${currentStatus} to ${newStatus}`,
+          400
+        );
+      }
+
+      updateData.status = newStatus;
     }
 
     if (Object.keys(updateData).length === 0) {

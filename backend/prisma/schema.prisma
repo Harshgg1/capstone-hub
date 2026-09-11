@@ -69,15 +69,32 @@ enum RequirementType {
   NON_FUNCTIONAL
 }
 
+enum RequirementPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RequirementStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
 model Requirement {
-  id          String          @id @default(uuid())
+  id          String              @id @default(uuid())
   title       String
   description String
-  type        RequirementType @default(FUNCTIONAL)
+  type        RequirementType     @default(FUNCTIONAL)
+  priority    RequirementPriority @default(MEDIUM)
+  status      RequirementStatus   @default(DRAFT)
   projectId   String
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   @@map("requirements")
 }
