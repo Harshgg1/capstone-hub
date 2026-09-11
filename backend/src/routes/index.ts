@@ -4,6 +4,7 @@ import authRoutes from './auth.routes';
 import projectRoutes from './project.routes';
 import milestoneRoutes from './milestone.routes';
 import requirementRoutes from './requirement.routes';
+import userStoryRoutes from './userStory.routes';
 
 const apiRouter = Router();
 
@@ -12,5 +13,7 @@ apiRouter.use('/auth', authRoutes);
 apiRouter.use('/projects', projectRoutes);
 apiRouter.use('/milestones', milestoneRoutes);
 apiRouter.use('/requirements', requirementRoutes);
+apiRouter.use('/stories', userStoryRoutes);
+apiRouter.use('/user-stories', userStoryRoutes);
 
 export default apiRouter;
