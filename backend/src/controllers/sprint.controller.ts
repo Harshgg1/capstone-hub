@@ -92,4 +92,23 @@ export class SprintController {
       next(error);
     }
   }
+
+  public static async assignStories(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const { storyIds } = req.body;
+      const result = await SprintService.assignStoriesToSprint(id, storyIds, req.user);
+      res.status(200).json({ success: true, message: result.message });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
 }

@@ -163,4 +163,40 @@ export class SprintService {
     await prisma.sprint.delete({ where: { id: sprint.id } });
     return { message: 'Sprint deleted successfully' };
   }
+
+  public static async assignStoriesToSprint(sprintId: string, storyIds: string[], user: { id: string; role: Role }) {
+    if (!sprintId || !sprintId.trim()) throw new AppError('Sprint ID is required', 400);
+    if (!Array.isArray(storyIds) || storyIds.length === 0) {
+      throw new AppError('An array of story IDs is required', 400);
+    }
+
+    const sprint = await prisma.sprint.findUnique({
+      where: { id: sprintId.trim() },
+      include: { project: { include: { team: { include: { members: true } } } } },
+    });
+    if (!sprint) throw new AppError('Sprint not found', 404);
+    if (!this.canAccessProject(user, sprint.project)) throw new AppError('Access denied: insufficient permissions', 403);
+
+    // Verify all stories exist and belong to the same project as the sprint
+    const stories = await prisma.userStory.findMany({
+      where: { id: { in: storyIds } },
+    });
+
+    if (stories.length !== storyIds.length) {
+      throw new AppError('One or more user stories not found', 404);
+    }
+
+    const mismatchedProject = stories.some((story: any) => story.projectId !== sprint.projectId);
+    if (mismatchedProject) {
+      throw new AppError('All user stories must belong to the same project as the sprint', 400);
+    }
+
+    // Assign sprintId
+    await prisma.userStory.updateMany({
+      where: { id: { in: storyIds } },
+      data: { sprintId: sprint.id },
+    });
+
+    return { message: 'Stories successfully assigned to sprint' };
+  }
 }

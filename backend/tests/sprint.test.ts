@@ -16,6 +16,10 @@ vi.mock('../src/lib/prisma', () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    userStory: {
+      findMany: vi.fn(),
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -147,6 +151,46 @@ describe('Sprint API', () => {
 
       expect(response.status).toBe(200);
       expect(prisma.sprint.delete).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /api/sprints/:id/stories', () => {
+    it('should assign stories successfully', async () => {
+      (prisma.sprint.findUnique as any).mockResolvedValue(mockSprint);
+      (prisma.userStory.findMany as any).mockResolvedValue([
+        { id: 'story-1', projectId: 'proj-1' },
+        { id: 'story-2', projectId: 'proj-1' }
+      ]);
+      (prisma.userStory.updateMany as any).mockResolvedValue({ count: 2 });
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/sprints/sprint-1/stories')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ storyIds: ['story-1', 'story-2'] });
+
+      expect(response.status).toBe(200);
+      expect(prisma.userStory.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['story-1', 'story-2'] } },
+        data: { sprintId: 'sprint-1' }
+      });
+    });
+
+    it('should fail if stories belong to a different project', async () => {
+      (prisma.sprint.findUnique as any).mockResolvedValue(mockSprint);
+      (prisma.userStory.findMany as any).mockResolvedValue([
+        { id: 'story-1', projectId: 'proj-1' },
+        { id: 'story-3', projectId: 'diff-proj' }
+      ]);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/sprints/sprint-1/stories')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ storyIds: ['story-1', 'story-3'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('belong to the same project');
     });
   });
 });

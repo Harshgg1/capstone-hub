@@ -12,5 +12,6 @@ router.get('/:id', SprintController.getSprintById);
 router.put('/:id', SprintController.updateSprint);
 router.patch('/:id', SprintController.updateSprint);
 router.delete('/:id', SprintController.deleteSprint);
+router.post('/:id/stories', SprintController.assignStories);
 
 export default router;
