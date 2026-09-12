@@ -1,4 +1,4 @@
-import { Role, UserStoryStatus } from '@prisma/client';
+import { Role, UserStoryStatus, UserStoryPriority } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
@@ -6,6 +6,8 @@ export interface CreateUserStoryDTO {
   title: string;
   description?: string | null;
   status?: UserStoryStatus;
+  priority?: UserStoryPriority;
+  storyPoints?: number | null;
   order?: number;
 }
 
@@ -13,11 +15,14 @@ export interface UpdateUserStoryDTO {
   title?: string;
   description?: string | null;
   status?: UserStoryStatus;
+  priority?: UserStoryPriority;
+  storyPoints?: number | null;
   order?: number;
 }
 
 export interface UserStoryQueryDTO {
   status?: UserStoryStatus;
+  priority?: UserStoryPriority;
 }
 
 export class UserStoryService {
@@ -82,7 +87,7 @@ export class UserStoryService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const { title, description, status, order } = data;
+    const { title, description, status, priority, storyPoints, order } = data;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new AppError('User story title is required', 400);
@@ -107,11 +112,32 @@ export class UserStoryService {
       storyOrder = order;
     }
 
+    let storyPriority: UserStoryPriority = UserStoryPriority.MEDIUM;
+    if (priority !== undefined) {
+      if (!Object.values(UserStoryPriority).includes(priority)) {
+        throw new AppError(
+          `Invalid user story priority. Allowed: ${Object.values(UserStoryPriority).join(', ')}`,
+          400
+        );
+      }
+      storyPriority = priority;
+    }
+
+    let storyStoryPoints: number | null = null;
+    if (storyPoints !== undefined) {
+      if (storyPoints !== null && (typeof storyPoints !== 'number' || isNaN(storyPoints) || storyPoints < 0)) {
+        throw new AppError('Invalid story points', 400);
+      }
+      storyStoryPoints = storyPoints;
+    }
+
     return prisma.userStory.create({
       data: {
         title: title.trim(),
         description: description ? description.trim() : null,
         status: storyStatus,
+        priority: storyPriority,
+        storyPoints: storyStoryPoints,
         order: storyOrder,
         projectId: project.id,
       },
@@ -152,6 +178,7 @@ export class UserStoryService {
     const where: {
       projectId: string;
       status?: UserStoryStatus;
+      priority?: UserStoryPriority;
     } = {
       projectId: project.id,
     };
@@ -164,6 +191,16 @@ export class UserStoryService {
         );
       }
       where.status = query.status;
+    }
+
+    if (query?.priority) {
+      if (!Object.values(UserStoryPriority).includes(query.priority)) {
+        throw new AppError(
+          `Invalid user story priority. Allowed: ${Object.values(UserStoryPriority).join(', ')}`,
+          400
+        );
+      }
+      where.priority = query.priority;
     }
 
     return prisma.userStory.findMany({
@@ -248,6 +285,8 @@ export class UserStoryService {
       title?: string;
       description?: string | null;
       status?: UserStoryStatus;
+      priority?: UserStoryPriority;
+      storyPoints?: number | null;
       order?: number;
     } = {};
 
@@ -270,6 +309,23 @@ export class UserStoryService {
         );
       }
       updateData.status = data.status;
+    }
+
+    if (data.priority !== undefined) {
+      if (!Object.values(UserStoryPriority).includes(data.priority)) {
+        throw new AppError(
+          `Invalid user story priority. Allowed: ${Object.values(UserStoryPriority).join(', ')}`,
+          400
+        );
+      }
+      updateData.priority = data.priority;
+    }
+
+    if (data.storyPoints !== undefined) {
+      if (data.storyPoints !== null && (typeof data.storyPoints !== 'number' || isNaN(data.storyPoints) || data.storyPoints < 0)) {
+        throw new AppError('Invalid story points', 400);
+      }
+      updateData.storyPoints = data.storyPoints;
     }
 
     if (data.order !== undefined) {

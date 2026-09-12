@@ -120,6 +120,13 @@ model RequirementVersion {
   @@map("requirement_versions")
 }
 
+enum UserStoryPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum UserStoryStatus {
   TODO
   IN_PROGRESS
@@ -127,11 +134,13 @@ enum UserStoryStatus {
 }
 
 model UserStory {
-  id          String          @id @default(uuid())
+  id          String            @id @default(uuid())
   title       String
   description String?
-  status      UserStoryStatus @default(TODO)
-  order       Int             @default(0)
+  status      UserStoryStatus   @default(TODO)
+  priority    UserStoryPriority @default(MEDIUM)
+  storyPoints Int?
+  order       Int               @default(0)
   projectId   String
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt   DateTime        @default(now())
