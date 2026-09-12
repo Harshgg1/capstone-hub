@@ -16,6 +16,13 @@ export interface UpdateTaskDTO {
   assigneeId?: string | null;
 }
 
+const ALLOWED_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+  TODO: [TaskStatus.IN_PROGRESS],
+  IN_PROGRESS: [TaskStatus.TODO, TaskStatus.IN_REVIEW, TaskStatus.DONE],
+  IN_REVIEW: [TaskStatus.IN_PROGRESS, TaskStatus.DONE],
+  DONE: [TaskStatus.IN_PROGRESS, TaskStatus.IN_REVIEW],
+};
+
 export class TaskService {
   private static canAccessProject(
     user: { id: string; role: Role },
@@ -120,10 +127,16 @@ export class TaskService {
     if (data.description !== undefined) {
       updateData.description = data.description?.trim();
     }
-    if (data.status !== undefined) {
+    if (data.status !== undefined && data.status !== task.status) {
       if (!Object.values(TaskStatus).includes(data.status)) {
         throw new AppError('Invalid task status', 400);
       }
+      
+      const allowedNextStates = ALLOWED_TRANSITIONS[task.status];
+      if (!allowedNextStates.includes(data.status)) {
+        throw new AppError(`Invalid status transition from ${task.status} to ${data.status}`, 400);
+      }
+
       updateData.status = data.status;
     }
     if (data.assigneeId !== undefined) {

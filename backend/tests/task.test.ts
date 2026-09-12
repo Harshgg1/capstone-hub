@@ -138,7 +138,7 @@ describe('Task API', () => {
 
   describe('PATCH /api/tasks/:id', () => {
     it('should update task successfully', async () => {
-      (prisma.task.findUnique as any).mockResolvedValue(mockTask);
+      (prisma.task.findUnique as any).mockResolvedValue(mockTask); // status is TODO
       (prisma.task.update as any).mockResolvedValue({ ...mockTask, status: TaskStatus.IN_PROGRESS });
 
       const token = generateToken(teamMemberUser);
@@ -149,6 +149,19 @@ describe('Task API', () => {
 
       expect(response.status).toBe(200);
       expect(prisma.task.update).toHaveBeenCalled();
+    });
+
+    it('should fail on invalid status transition', async () => {
+      (prisma.task.findUnique as any).mockResolvedValue(mockTask); // status is TODO
+      
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .patch('/api/tasks/task-1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: TaskStatus.DONE });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid status transition');
     });
 
     it('should fail to update if assignee is not a team member', async () => {
