@@ -9,9 +9,13 @@ import apiRouter from './routes';
 export const createApp = (): Application => {
   const app = express();
 
+  const origins = config.corsOrigin.includes(',')
+    ? config.corsOrigin.split(',').map((o) => o.trim())
+    : config.corsOrigin;
+
   app.use(
     cors({
-      origin: config.corsOrigin,
+      origin: origins,
       credentials: true,
     })
   );
