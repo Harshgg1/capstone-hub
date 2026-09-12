@@ -39,6 +39,7 @@ model Project {
   milestones   Milestone[]
   requirements Requirement[]
   userStories  UserStory[]
+  sprints      Sprint[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -143,10 +144,33 @@ model UserStory {
   order       Int               @default(0)
   projectId   String
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId    String?
+  sprint      Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
   @@map("user_stories")
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+model Sprint {
+  id          String         @id @default(uuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  status      SprintStatus   @default(PLANNED)
+  projectId   String
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userStories UserStory[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("sprints")
 }
 
 model Team {

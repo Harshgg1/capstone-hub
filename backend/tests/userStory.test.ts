@@ -187,6 +187,7 @@ describe('User Story API', () => {
           storyPoints: null,
           order: 0,
           projectId: 'proj-uuid-1',
+          sprintId: null,
         },
       });
     });
@@ -218,6 +219,7 @@ describe('User Story API', () => {
           storyPoints: null,
           order: 0,
           projectId: 'proj-uuid-1',
+          sprintId: null,
         },
       });
     });

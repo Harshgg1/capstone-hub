@@ -9,6 +9,7 @@ export interface CreateUserStoryDTO {
   priority?: UserStoryPriority;
   storyPoints?: number | null;
   order?: number;
+  sprintId?: string | null;
 }
 
 export interface UpdateUserStoryDTO {
@@ -18,6 +19,7 @@ export interface UpdateUserStoryDTO {
   priority?: UserStoryPriority;
   storyPoints?: number | null;
   order?: number;
+  sprintId?: string | null;
 }
 
 export interface UserStoryQueryDTO {
@@ -87,7 +89,7 @@ export class UserStoryService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const { title, description, status, priority, storyPoints, order } = data;
+    const { title, description, status, priority, storyPoints, order, sprintId } = data;
 
     if (!title || typeof title !== 'string' || !title.trim()) {
       throw new AppError('User story title is required', 400);
@@ -140,6 +142,7 @@ export class UserStoryService {
         storyPoints: storyStoryPoints,
         order: storyOrder,
         projectId: project.id,
+        sprintId: sprintId || null,
       },
     });
   }
@@ -288,6 +291,7 @@ export class UserStoryService {
       priority?: UserStoryPriority;
       storyPoints?: number | null;
       order?: number;
+      sprintId?: string | null;
     } = {};
 
     if (data.title !== undefined) {
@@ -333,6 +337,10 @@ export class UserStoryService {
         throw new AppError('Invalid order number', 400);
       }
       updateData.order = data.order;
+    }
+
+    if (data.sprintId !== undefined) {
+      updateData.sprintId = data.sprintId;
     }
 
     if (Object.keys(updateData).length === 0) {
