@@ -45,6 +45,13 @@ export interface BugFilters {
 }
 
 export class BugService {
+
+  private static canManage(user: { id: string; role: Role }, project: any): boolean {
+    if (user.role === Role.FACULTY) return true;
+    if (!project.team) return false;
+    return project.team.leadId === user.id || project.team.members.some((m: any) => m.userId === user.id && m.role === Role.TEAM_LEAD);
+  }
+
   private static canAccessProject(user: { id: string; role: Role }, project: any): boolean {
     if (user.role === Role.FACULTY) {
       return !project.facultyId || project.facultyId === user.id;
@@ -240,7 +247,45 @@ export class BugService {
     if (data.description !== undefined) updateData.description = data.description?.trim() || null;
     if (data.priority !== undefined) updateData.priority = data.priority;
     if (data.severity !== undefined) updateData.severity = data.severity;
-    if (data.status !== undefined) updateData.status = data.status;
+    if (data.status !== undefined && data.status !== bug.status) {
+      const from = bug.status;
+      const to = data.status;
+
+      const validTransitions: Record<BugStatus, BugStatus[]> = {
+        OPEN: [BugStatus.IN_PROGRESS, BugStatus.RESOLVED],
+        IN_PROGRESS: [BugStatus.OPEN, BugStatus.RESOLVED],
+        RESOLVED: [BugStatus.OPEN, BugStatus.IN_PROGRESS, BugStatus.CLOSED],
+        CLOSED: [BugStatus.OPEN],
+      };
+
+      if (!validTransitions[from].includes(to)) {
+        throw new AppError(`Invalid status transition from ${from} to ${to}`, 422);
+      }
+
+      const isClosingOrReopening = 
+        to === BugStatus.CLOSED || 
+        (from === BugStatus.CLOSED && to === BugStatus.OPEN) ||
+        (from === BugStatus.RESOLVED && to === BugStatus.OPEN);
+
+      const canManage = this.canManage(user, bug.project);
+      const isReporter = bug.reporterId === user.id;
+      
+      // If we are assigning this right now, we can check updateData.assigneeId
+      const targetAssigneeId = data.assigneeId !== undefined ? data.assigneeId : bug.assigneeId;
+      const isAssignee = targetAssigneeId === user.id;
+
+      if (isClosingOrReopening) {
+        if (!canManage && !isReporter) {
+          throw new AppError('Only team lead, faculty, or the reporter can reopen or close a bug', 403);
+        }
+      } else {
+        if (!canManage && !isReporter && !isAssignee) {
+          throw new AppError('Only the assignee, reporter, team lead, or faculty can update bug status', 403);
+        }
+      }
+
+      updateData.status = data.status;
+    }
     if (data.pullRequestUrl !== undefined) updateData.pullRequestUrl = data.pullRequestUrl?.trim() || null;
     if (data.prNumber !== undefined) updateData.prNumber = data.prNumber;
 
@@ -291,8 +336,15 @@ export class BugService {
       }
     }
 
-    if (data.assigneeId !== undefined) {
+    if (data.assigneeId !== undefined && data.assigneeId !== bug.assigneeId) {
+      if (!this.canManage(user, bug.project)) {
+        throw new AppError('Only team lead or faculty can assign bugs', 403);
+      }
       if (data.assigneeId) {
+        const isMember = bug.project.team?.members.some((m: any) => m.userId === data.assigneeId);
+        if (!isMember) {
+          throw new AppError('Assignee must be a team member of the project', 400);
+        }
         const assignee = await prisma.user.findUnique({ where: { id: data.assigneeId.trim() } });
         if (!assignee) throw new AppError('Assignee user not found', 404);
         updateData.assigneeId = assignee.id;
