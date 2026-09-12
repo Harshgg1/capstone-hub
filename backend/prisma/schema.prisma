@@ -25,6 +25,7 @@ model User {
   ledTeams      Team[]         @relation("TeamLead")
   facultyReview Project[]      @relation("FacultyAdvisor")
   tasks         Task[]
+  activityLogs  ActivityLog[]
 
   @@map("users")
 }
@@ -221,4 +222,21 @@ model TeamMember {
 
   @@unique([teamId, userId])
   @@map("team_members")
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String
+  details    String?
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  projectId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId])
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
 }

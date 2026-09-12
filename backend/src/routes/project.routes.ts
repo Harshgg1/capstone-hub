@@ -5,6 +5,7 @@ import { RequirementController } from '../controllers/requirement.controller';
 import { UserStoryController } from '../controllers/userStory.controller';
 import { BacklogController } from '../controllers/backlog.controller';
 import { SprintController } from '../controllers/sprint.controller';
+import { ActivityLogController } from '../controllers/activityLog.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -62,6 +63,8 @@ router.patch('/:projectId/product-backlog/reorder', BacklogController.reorderBac
 // Sprint routes on project
 router.get('/:projectId/sprints', SprintController.getSprints);
 router.post('/:projectId/sprints', SprintController.createSprint);
+
+router.get('/:projectId/activity', ActivityLogController.getProjectActivityLogs);
 
 export default router;
 
