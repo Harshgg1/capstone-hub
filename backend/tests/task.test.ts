@@ -105,6 +105,20 @@ describe('Task API', () => {
         data: expect.objectContaining({ assigneeId: 'member-1' })
       }));
     });
+
+    it('should fail if assignee is not a team member', async () => {
+      (prisma.userStory.findUnique as any).mockResolvedValue(mockUserStory);
+      (prisma.user.findUnique as any).mockResolvedValue({ id: 'outsider-1' });
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .post('/api/stories/story-1/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Task 1', assigneeId: 'outsider-1' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('member of the project team');
+    });
   });
 
   describe('GET /api/stories/:storyId/tasks', () => {
@@ -135,6 +149,20 @@ describe('Task API', () => {
 
       expect(response.status).toBe(200);
       expect(prisma.task.update).toHaveBeenCalled();
+    });
+
+    it('should fail to update if assignee is not a team member', async () => {
+      (prisma.task.findUnique as any).mockResolvedValue(mockTask);
+      (prisma.user.findUnique as any).mockResolvedValue({ id: 'outsider-1' });
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .patch('/api/tasks/task-1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ assigneeId: 'outsider-1' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('member of the project team');
     });
   });
 

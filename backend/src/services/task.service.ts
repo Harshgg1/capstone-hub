@@ -53,6 +53,14 @@ export class TaskService {
     }
 
     if (assigneeId) {
+      const isTeamMember =
+        story.project.team?.leadId === assigneeId ||
+        story.project.team?.members.some((m) => m.userId === assigneeId);
+
+      if (!isTeamMember) {
+        throw new AppError('Assignee must be a member of the project team', 400);
+      }
+
       const userExists = await prisma.user.findUnique({ where: { id: assigneeId } });
       if (!userExists) throw new AppError('Assignee not found', 404);
     }
@@ -120,6 +128,14 @@ export class TaskService {
     }
     if (data.assigneeId !== undefined) {
       if (data.assigneeId) {
+        const isTeamMember =
+          task.userStory.project.team?.leadId === data.assigneeId ||
+          task.userStory.project.team?.members.some((m) => m.userId === data.assigneeId);
+
+        if (!isTeamMember) {
+          throw new AppError('Assignee must be a member of the project team', 400);
+        }
+
         const userExists = await prisma.user.findUnique({ where: { id: data.assigneeId } });
         if (!userExists) throw new AppError('Assignee not found', 404);
       }
