@@ -20,6 +20,9 @@ vi.mock('../src/lib/prisma', () => ({
       findMany: vi.fn(),
       updateMany: vi.fn(),
     },
+    task: {
+      findMany: vi.fn(),
+    }
   },
 }));
 
@@ -191,6 +194,37 @@ describe('Sprint API', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toContain('belong to the same project');
+    });
+  });
+
+  describe('GET /api/sprints/:id/board', () => {
+    it('should get sprint board successfully', async () => {
+      (prisma.sprint.findUnique as any).mockResolvedValue(mockSprint);
+      (prisma.task.findMany as any).mockResolvedValue([
+        { id: 'task-1', status: 'TODO', userStoryId: 'story-1' },
+        { id: 'task-2', status: 'IN_PROGRESS', userStoryId: 'story-1' },
+      ]);
+
+      const token = generateToken(teamMemberUser);
+      const response = await request(app)
+        .get('/api/sprints/sprint-1/board')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.TODO).toHaveLength(1);
+      expect(response.body.data.IN_PROGRESS).toHaveLength(1);
+      expect(response.body.data.DONE).toHaveLength(0);
+    });
+
+    it('should return 403 if unauthorized', async () => {
+      (prisma.sprint.findUnique as any).mockResolvedValue(mockSprint);
+      const token = generateToken(outsiderUser);
+      
+      const response = await request(app)
+        .get('/api/sprints/sprint-1/board')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(403);
     });
   });
 });

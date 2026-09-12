@@ -24,6 +24,9 @@ router.get('/:id', ProjectController.getProjectById);
 // Update project
 router.put('/:id', ProjectController.updateProject);
 router.patch('/:id', ProjectController.updateProject);
+
+// Project board
+router.get('/:id/board', ProjectController.getProjectBoard);
 // Team member routes
 router.get('/:id/members', ProjectController.getTeamMembers);
 router.post('/:id/members', ProjectController.addTeamMember);

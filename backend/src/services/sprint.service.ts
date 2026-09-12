@@ -199,4 +199,30 @@ export class SprintService {
 
     return { message: 'Stories successfully assigned to sprint' };
   }
+
+  public static async getSprintBoard(sprintId: string, user?: { id: string; role: Role }) {
+    if (!sprintId || !sprintId.trim()) throw new AppError('Sprint ID is required', 400);
+    const sprint = await prisma.sprint.findUnique({
+      where: { id: sprintId.trim() },
+      include: { project: { include: { team: { include: { members: true } } } } },
+    });
+    if (!sprint) throw new AppError('Sprint not found', 404);
+    if (user && !this.canAccessProject(user, sprint.project)) throw new AppError('Access denied: insufficient permissions', 403);
+
+    const tasks = await prisma.task.findMany({
+      where: { userStory: { sprintId: sprint.id } },
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+        userStory: { select: { id: true, title: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return {
+      TODO: tasks.filter((t) => t.status === 'TODO'),
+      IN_PROGRESS: tasks.filter((t) => t.status === 'IN_PROGRESS'),
+      IN_REVIEW: tasks.filter((t) => t.status === 'IN_REVIEW'),
+      DONE: tasks.filter((t) => t.status === 'DONE'),
+    };
+  }
 }
