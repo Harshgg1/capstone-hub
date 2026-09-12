@@ -10,6 +10,7 @@ import { NotificationController } from '../controllers/notification.controller';
 import { GitHubController } from '../controllers/github.controller';
 import { BugController } from '../controllers/bug.controller';
 import { TraceabilityController } from '../controllers/traceability.controller';
+import { DeliverableController } from '../controllers/deliverable.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -43,6 +44,9 @@ router.patch('/:id/members/:userId', ProjectController.updateMemberRole);
 // Milestone routes on project
 router.get('/:projectId/milestones', MilestoneController.getMilestones);
 router.post('/:projectId/milestones', MilestoneController.createMilestone);
+
+// Deliverable routes on project
+router.get('/:projectId/deliverables', DeliverableController.getDeliverablesByProject);
 
 // Requirement routes on project
 router.get('/:projectId/requirements', RequirementController.getRequirements);

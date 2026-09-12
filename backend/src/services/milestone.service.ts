@@ -157,6 +157,9 @@ export class MilestoneService {
         project: {
           select: { id: true, name: true },
         },
+        deliverables: {
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+        },
       },
     });
 
