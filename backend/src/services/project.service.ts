@@ -22,6 +22,22 @@ export class ProjectService {
 
     if (data.teamId) {
       projectData.teamId = data.teamId;
+    } else if (user.role !== Role.FACULTY) {
+      // Project access for students is scoped through team membership. Create
+      // an owning team with the creator as lead so the new project is visible
+      // immediately and can be managed by its creator.
+      projectData.team = {
+        create: {
+          name: `${data.name.trim()} Team`,
+          leadId: user.id,
+          members: {
+            create: {
+              userId: user.id,
+              role: Role.TEAM_LEAD,
+            },
+          },
+        },
+      };
     }
 
     return prisma.project.create({
