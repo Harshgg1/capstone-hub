@@ -103,6 +103,35 @@ describe('Project API', () => {
     },
   };
 
+  describe('POST /api/projects', () => {
+    it('creates an owning team for a team lead so the new project is immediately accessible', async () => {
+      (prisma.project.create as any).mockResolvedValue(mockProject);
+
+      const token = generateToken(teamLeadUser);
+      const response = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'New Capstone', description: 'A new project' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(prisma.project.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'New Capstone',
+          team: {
+            create: {
+              name: 'New Capstone Team',
+              leadId: teamLeadUser.id,
+              members: {
+                create: { userId: teamLeadUser.id, role: Role.TEAM_LEAD },
+              },
+            },
+          },
+        }),
+      });
+    });
+  });
+
   describe('PUT /api/projects/:id & PATCH /api/projects/:id', () => {
     it('should return 401 if unauthenticated', async () => {
       const response = await request(app)

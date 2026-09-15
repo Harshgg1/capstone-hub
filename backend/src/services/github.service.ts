@@ -122,10 +122,6 @@ export class GitHubService {
 
     const { repoOwner, repoName, repoUrl, accessToken, defaultBranch } = data;
 
-    if (!repoOwner || typeof repoOwner !== 'string' || !repoOwner.trim()) {
-      throw new AppError('GitHub repository owner is required', 400);
-    }
-
     if (!repoName || typeof repoName !== 'string' || !repoName.trim()) {
       throw new AppError('GitHub repository name is required', 400);
     }
@@ -149,8 +145,24 @@ export class GitHubService {
       throw new AppError('Access denied: insufficient permissions to manage GitHub repository', 403);
     }
 
-    const cleanOwner = repoOwner.trim();
-    const cleanRepo = repoName.trim();
+    let cleanOwner = typeof repoOwner === 'string' ? repoOwner.trim() : '';
+    let cleanRepo = repoName.trim();
+
+    // The project form accepts a repository name, but people naturally paste
+    // the repository URL. Normalize that input before saving the connection so
+    // requests never become `/repos/me/https://github.com/...`.
+    const githubUrl = cleanRepo.match(
+      /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/?(?:[?#].*)?$/i
+    );
+    if (githubUrl) {
+      cleanOwner = githubUrl[1];
+      cleanRepo = githubUrl[2].replace(/\.git$/i, '');
+    }
+
+    if (!cleanOwner) {
+      throw new AppError('GitHub repository owner is required', 400);
+    }
+
     const constructedUrl = repoUrl?.trim() || `https://github.com/${cleanOwner}/${cleanRepo}`;
     const cleanBranch = defaultBranch?.trim() || 'main';
 
@@ -426,7 +438,8 @@ export class GitHubService {
     }
 
     const { repoOwner, repoName, defaultBranch } = project.githubConnection;
-    const branch = query.sha || query.branch || defaultBranch || 'main';
+    const requestedBranch = query.sha || query.branch;
+    const branch = requestedBranch || defaultBranch || 'main';
     const page = Math.max(1, Number(query.page) || 1);
     const perPage = Math.min(100, Math.max(1, Number(query.per_page || query.limit) || 30));
 
@@ -439,10 +452,26 @@ export class GitHubService {
     params.append('page', String(page));
     params.append('per_page', String(perPage));
 
-    const rawCommits = await this.fetchFromGitHub<any[]>(
-      `/repos/${repoOwner}/${repoName}/commits?${params.toString()}`,
-      project.githubConnection
-    );
+    let rawCommits: any[];
+    try {
+      rawCommits = await this.fetchFromGitHub<any[]>(
+        `/repos/${repoOwner}/${repoName}/commits?${params.toString()}`,
+        project.githubConnection
+      );
+    } catch (error) {
+      // Older connections may have stored `main` although the repository uses
+      // another default branch. GitHub can choose its actual default when no
+      // branch is specified, while explicit user branch selections still
+      // surface their original error.
+      if (!(error instanceof AppError) || error.statusCode !== 409 || requestedBranch) {
+        throw error;
+      }
+      params.delete('sha');
+      rawCommits = await this.fetchFromGitHub<any[]>(
+        `/repos/${repoOwner}/${repoName}/commits?${params.toString()}`,
+        project.githubConnection
+      );
+    }
 
     const commits = Array.isArray(rawCommits)
       ? rawCommits.map((item) => ({
