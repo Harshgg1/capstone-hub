@@ -426,7 +426,8 @@ export class GitHubService {
     }
 
     const { repoOwner, repoName, defaultBranch } = project.githubConnection;
-    const branch = query.sha || query.branch || defaultBranch || 'main';
+    const requestedBranch = query.sha || query.branch;
+    const branch = requestedBranch || defaultBranch || 'main';
     const page = Math.max(1, Number(query.page) || 1);
     const perPage = Math.min(100, Math.max(1, Number(query.per_page || query.limit) || 30));
 
@@ -439,10 +440,26 @@ export class GitHubService {
     params.append('page', String(page));
     params.append('per_page', String(perPage));
 
-    const rawCommits = await this.fetchFromGitHub<any[]>(
-      `/repos/${repoOwner}/${repoName}/commits?${params.toString()}`,
-      project.githubConnection
-    );
+    let rawCommits: any[];
+    try {
+      rawCommits = await this.fetchFromGitHub<any[]>(
+        `/repos/${repoOwner}/${repoName}/commits?${params.toString()}`,
+        project.githubConnection
+      );
+    } catch (error) {
+      // Older connections may have stored `main` although the repository uses
+      // another default branch. GitHub can choose its actual default when no
+      // branch is specified, while explicit user branch selections still
+      // surface their original error.
+      if (!(error instanceof AppError) || error.statusCode !== 409 || requestedBranch) {
+        throw error;
+      }
+      params.delete('sha');
+      rawCommits = await this.fetchFromGitHub<any[]>(
+        `/repos/${repoOwner}/${repoName}/commits?${params.toString()}`,
+        project.githubConnection
+      );
+    }
 
     const commits = Array.isArray(rawCommits)
       ? rawCommits.map((item) => ({
