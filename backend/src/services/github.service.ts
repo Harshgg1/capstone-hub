@@ -122,10 +122,6 @@ export class GitHubService {
 
     const { repoOwner, repoName, repoUrl, accessToken, defaultBranch } = data;
 
-    if (!repoOwner || typeof repoOwner !== 'string' || !repoOwner.trim()) {
-      throw new AppError('GitHub repository owner is required', 400);
-    }
-
     if (!repoName || typeof repoName !== 'string' || !repoName.trim()) {
       throw new AppError('GitHub repository name is required', 400);
     }
@@ -149,8 +145,24 @@ export class GitHubService {
       throw new AppError('Access denied: insufficient permissions to manage GitHub repository', 403);
     }
 
-    const cleanOwner = repoOwner.trim();
-    const cleanRepo = repoName.trim();
+    let cleanOwner = typeof repoOwner === 'string' ? repoOwner.trim() : '';
+    let cleanRepo = repoName.trim();
+
+    // The project form accepts a repository name, but people naturally paste
+    // the repository URL. Normalize that input before saving the connection so
+    // requests never become `/repos/me/https://github.com/...`.
+    const githubUrl = cleanRepo.match(
+      /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/?#]+)\/([^/?#]+)\/?(?:[?#].*)?$/i
+    );
+    if (githubUrl) {
+      cleanOwner = githubUrl[1];
+      cleanRepo = githubUrl[2].replace(/\.git$/i, '');
+    }
+
+    if (!cleanOwner) {
+      throw new AppError('GitHub repository owner is required', 400);
+    }
+
     const constructedUrl = repoUrl?.trim() || `https://github.com/${cleanOwner}/${cleanRepo}`;
     const cleanBranch = defaultBranch?.trim() || 'main';
 

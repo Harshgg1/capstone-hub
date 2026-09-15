@@ -173,6 +173,28 @@ describe('GitHub Connection API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
+
+    it('normalizes a pasted GitHub repository URL', async () => {
+      const token = generateToken(teamLeadUser);
+      vi.mocked(prisma.project.findUnique).mockResolvedValueOnce(mockProject as any);
+      vi.mocked((prisma as any).gitHubConnection.upsert).mockResolvedValueOnce({
+        ...mockConnectedRepo,
+        repoOwner: 'Harshgg1',
+        repoName: 'capstone-hub',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/projects/project-uuid-1/github/connect')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ repoOwner: 'me', repoName: 'https://github.com/Harshgg1/capstone-hub' });
+
+      expect(res.status).toBe(200);
+      expect((prisma as any).gitHubConnection.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ repoOwner: 'Harshgg1', repoName: 'capstone-hub' }),
+        })
+      );
+    });
   });
 
   describe('GET /api/projects/:projectId/github/connection', () => {
