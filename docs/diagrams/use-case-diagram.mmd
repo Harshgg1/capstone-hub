@@ -1,0 +1,45 @@
+flowchart LR
+    Faculty((Faculty))
+    Lead((Team Lead))
+    Member((Team Member))
+
+    subgraph CapstoneHub
+        UC1[Review Projects]
+        UC2[Review Requirements]
+        UC3[Review Deliverables]
+        UC4[Monitor Progress]
+
+        UC5[Manage Team]
+        UC6[Assign Tasks]
+        UC7[Manage Bugs]
+        UC8[Manage Project]
+        UC13[Manage Requirements]
+        UC14[Manage Sprints]
+        UC15[Manage Deliverables]
+
+        UC9[Work on Tasks]
+        UC10[Update Progress]
+        UC16[View GitHub Activity]
+        UC11[Resolve Bugs]
+        UC12[Contribute Documentation]
+    end
+
+    Faculty --> UC1
+    Faculty --> UC2
+    Faculty --> UC3
+    Faculty --> UC4
+
+    Lead --> UC5
+    Lead --> UC6
+    Lead --> UC7
+    Lead --> UC8
+    Lead --> UC13
+    Lead --> UC14
+    Lead --> UC15
+    Lead --> UC16
+
+    Member --> UC9
+    Member --> UC10
+    Member --> UC16
+    Member --> UC11
+    Member --> UC12

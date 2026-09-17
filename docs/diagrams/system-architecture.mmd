@@ -1,0 +1,49 @@
+flowchart TB
+    subgraph Client["Client Layer"]
+        UI["React + TypeScript + Tailwind CSS"]
+    end
+
+    subgraph Backend["Application Layer"]
+        API["Node.js + Express REST API"]
+
+        AUTH["Authentication & RBAC"]
+        PROJECT["Project & Team Management"]
+        REQ["Requirements & SRS"]
+        AGILE["Agile / Sprint / Task Management"]
+        BUG["Bug Management"]
+        DEL["Milestones & Deliverables"]
+        NOTIF["Activity & Notifications"]
+        GH["GitHub Integration"]
+    end
+
+    subgraph Data["Data Layer"]
+        PRISMA["Prisma ORM"]
+        DB[("PostgreSQL Database")]
+    end
+
+    subgraph External["External Services"]
+        GITHUB["GitHub REST API"]
+    end
+
+    UI --> API
+
+    API --> AUTH
+    API --> PROJECT
+    API --> REQ
+    API --> AGILE
+    API --> BUG
+    API --> DEL
+    API --> NOTIF
+    API --> GH
+
+    AUTH --> PRISMA
+    PROJECT --> PRISMA
+    REQ --> PRISMA
+    AGILE --> PRISMA
+    BUG --> PRISMA
+    DEL --> PRISMA
+    NOTIF --> PRISMA
+
+    PRISMA --> DB
+
+    GH <--> GITHUB

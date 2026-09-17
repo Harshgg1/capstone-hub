@@ -1,0 +1,13 @@
+flowchart LR
+    R[Requirement]
+    US[User Story]
+    T[Task]
+    S[Sprint]
+    B[Bug]
+    PR[GitHub Pull Request]
+
+    R -->|refined into| US
+    US -->|broken down into| T
+    T -->|planned in| S
+    T -->|may reveal| B
+    B -->|fixed through| PR

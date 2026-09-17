@@ -1,0 +1,95 @@
+classDiagram
+
+class User {
+    +userId
+    +name
+    +email
+    +role
+}
+
+class Project {
+    +projectId
+    +name
+    +description
+    +status
+}
+
+class Requirement {
+    +requirementId
+    +title
+    +type
+    +priority
+    +status
+    +version
+}
+
+class UserStory {
+    +storyId
+    +title
+    +description
+    +storyPoints
+    +status
+}
+
+class Task {
+    +taskId
+    +title
+    +status
+    +priority
+}
+
+class Sprint {
+    +sprintId
+    +name
+    +startDate
+    +endDate
+    +status
+}
+
+class Bug {
+    +bugId
+    +title
+    +description
+    +status
+    +priority
+}
+
+class Milestone {
+    +milestoneId
+    +name
+    +dueDate
+    +status
+}
+
+class Deliverable {
+    +deliverableId
+    +name
+    +type
+    +status
+}
+
+class ActivityRecord {
+    +activityId
+    +action
+    +timestamp
+}
+
+class Notification {
+    +notificationId
+    +message
+    +readStatus
+}
+
+User "1" --> "*" Project : participates in
+Project "1" --> "*" Requirement : contains
+Requirement "1" --> "*" UserStory : traces to
+UserStory "1" --> "*" Task : contains
+Sprint "1" --> "*" Task : includes
+Task "*" --> "0..1" Bug : may have
+Project "1" --> "*" Sprint : has
+Project "1" --> "*" Milestone : has
+Milestone "1" --> "*" Deliverable : contains
+User "1" --> "*" ActivityRecord : generates
+User "1" --> "*" Notification : receives
+User "*" --> "*" Task : assigned to
+User "*" --> "*" Bug : assigned to

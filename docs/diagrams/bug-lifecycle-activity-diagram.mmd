@@ -1,0 +1,17 @@
+flowchart TD
+    A([Bug Reported]) --> B[Create Bug]
+    B --> C[Assign Bug to Team Member]
+    C --> D[Set Status: In Progress]
+    D --> E[Developer Investigates]
+    E --> F{Bug Fixed?}
+
+    F -- No --> E
+    F -- Yes --> G[Set Status: Fixed]
+    G --> H[Team Lead Reviews]
+    H --> I{Resolution Accepted?}
+
+    I -- Yes --> J[Close Bug]
+    I -- No --> K[Reopen Bug]
+    K --> D
+
+    J --> L([Bug Resolved])

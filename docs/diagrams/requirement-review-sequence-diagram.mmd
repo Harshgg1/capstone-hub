@@ -1,0 +1,25 @@
+sequenceDiagram
+    actor TeamLead as Team Lead
+    actor Faculty
+    participant System as CapstoneHub
+    participant DB as Database
+
+    TeamLead->>System: Create requirement
+    System->>DB: Save requirement
+    DB-->>System: Requirement saved
+
+    TeamLead->>System: Submit requirement for review
+    System->>DB: Update status to "Under Review"
+    System-->>Faculty: Notify pending review
+
+    Faculty->>System: Review requirement
+
+    alt Approved
+        Faculty->>System: Approve requirement
+        System->>DB: Update status to "Approved"
+        System-->>TeamLead: Approval notification
+    else Revision Required
+        Faculty->>System: Request revision
+        System->>DB: Update status to "Revision Required"
+        System-->>TeamLead: Revision notification
+    end
