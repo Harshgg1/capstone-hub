@@ -762,4 +762,191 @@ export class ProjectService {
 
     return { message: 'Invitation cancelled' };
   }
+
+  public static async inviteFacultyAdvisor(
+    projectId: string,
+    data: { userId?: string; email?: string; facultyId?: string },
+    user: { id: string; name?: string; role: Role }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+            lead: true,
+          },
+        },
+        faculty: true,
+      },
+    });
+
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    if (!project.teamId || !project.team) {
+      throw new AppError('Project does not have an assigned team', 400);
+    }
+
+    const isFaculty = user.role === Role.FACULTY;
+    const isTeamLead =
+      project.team.leadId === user.id ||
+      project.team.members.some(
+        (m) => m.userId === user.id && m.role === Role.TEAM_LEAD
+      );
+
+    if (!isFaculty && !isTeamLead) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    const targetIdentifier = data.email || data.userId || data.facultyId;
+    if (!targetIdentifier || typeof targetIdentifier !== 'string' || !targetIdentifier.trim()) {
+      throw new AppError('Email or Faculty ID is required', 400);
+    }
+
+    const isEmail = targetIdentifier.includes('@');
+    const targetUser = await prisma.user.findUnique({
+      where: isEmail
+        ? { email: targetIdentifier.trim().toLowerCase() }
+        : { id: targetIdentifier.trim() },
+    });
+
+    if (!targetUser) {
+      throw new AppError('Faculty user not found', 404);
+    }
+
+    if (targetUser.role !== Role.FACULTY) {
+      throw new AppError('Target user is not a faculty member', 400);
+    }
+
+    if (project.facultyId === targetUser.id) {
+      throw new AppError('This faculty member is already the advisor for this project', 409);
+    }
+
+    const existingPending = await prisma.notification.findFirst({
+      where: {
+        userId: targetUser.id,
+        projectId: project.id,
+        entityType: 'FACULTY_INVITATION',
+        entityId: 'PENDING',
+      },
+    });
+
+    if (existingPending) {
+      throw new AppError('An invitation request has already been sent to this faculty member', 409);
+    }
+
+    const leaderName = user.name || project.team.lead?.name || 'Team Lead';
+
+    const invitation = await prisma.notification.create({
+      data: {
+        userId: targetUser.id,
+        title: 'Faculty Advisor Request',
+        message: `${leaderName} invited you to advise ${project.name}`,
+        type: NotificationType.GENERAL,
+        entityType: 'FACULTY_INVITATION',
+        entityId: 'PENDING',
+        projectId: project.id,
+      },
+    });
+
+    return {
+      ...invitation,
+      user: {
+        id: targetUser.id,
+        name: targetUser.name,
+        email: targetUser.email,
+      },
+    };
+  }
+
+  public static async getFacultyInvitations(projectId: string, user: { id: string; role: Role }) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new AppError('Project not found', 404);
+    }
+
+    const isFaculty = user.role === Role.FACULTY;
+    const isMember =
+      project.team &&
+      (project.team.leadId === user.id ||
+        project.team.members.some((m) => m.userId === user.id));
+
+    if (!isFaculty && !isMember) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    const invitations = await prisma.notification.findMany({
+      where: {
+        projectId,
+        entityType: 'FACULTY_INVITATION',
+        entityId: 'PENDING',
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return invitations;
+  }
+
+  public static async cancelFacultyInvitation(
+    projectId: string,
+    invitationId: string,
+    user: { id: string; role: Role }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    if (!project || !project.team) {
+      throw new AppError('Project not found', 404);
+    }
+
+    const isFaculty = user.role === Role.FACULTY;
+    const isTeamLead =
+      project.team.leadId === user.id ||
+      project.team.members.some(
+        (m) => m.userId === user.id && m.role === Role.TEAM_LEAD
+      );
+
+    if (!isFaculty && !isTeamLead) {
+      throw new AppError('Access denied: insufficient permissions', 403);
+    }
+
+    const invitation = await prisma.notification.findUnique({
+      where: { id: invitationId },
+    });
+
+    if (!invitation || invitation.projectId !== projectId || invitation.entityType !== 'FACULTY_INVITATION') {
+      throw new AppError('Invitation not found', 404);
+    }
+
+    await prisma.notification.delete({
+      where: { id: invitationId },
+    });
+
+    return { message: 'Faculty invitation cancelled' };
+  }
 }

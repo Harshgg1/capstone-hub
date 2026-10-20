@@ -23,7 +23,7 @@ export const ProjectWorkspacePage: React.FC = () => {
   useEffect(() => { load(); }, [projectId, tab]);
   const stats = useMemo(() => ({ requirements: project?._count?.requirements || 0, stories: project?._count?.userStories || 0, tasks: project?._count?.tasks || 0, members: project?.team?.members?.length || project?._count?.members || 0 }), [project]);
   const notify = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 3500); };
-  return <div className="space-y-6"><div className="flex items-start gap-3 text-sm text-slate-400"><Link to="/projects" className="hover:text-indigo-600">Projects</Link><ChevronRight size={16}/><span className="text-slate-700">{project?.name || 'Project workspace'}</span></div><section className="surface overflow-hidden"><div className="bg-[#17213a] p-6 text-white sm:p-8"><p className="eyebrow text-indigo-300">Project workspace</p><div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h1 className="text-3xl font-semibold tracking-tight">{project?.name || 'Loading project…'}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{project?.description || 'A shared view of planning, delivery, and evidence.'}</p></div><span className="badge bg-emerald-400/15 text-emerald-300">● Active delivery</span></div></div><div className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-white p-2">{tabs.map(t => <button key={t.key} onClick={() => setParams({ tab: t.key })} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${active.key === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}><t.icon size={15}/>{t.label}</button>)}</div></section>{error && <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={load} className="ml-3 font-semibold underline">Retry</button></div>}{notice && <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700"><Check size={16}/>{notice}</div>}{loading ? <div className="surface p-12 text-center text-sm text-slate-500">Loading {active.label.toLowerCase()}…</div> : tab === 'overview' ? <Overview stats={stats} items={records}/> : tab === 'requirements' ? <Requirements items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'backlog' ? <Backlog items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'sprints' ? <Sprints items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'tasks' ? <Tasks stories={records} refresh={load} notify={notify}/> : tab === 'board' ? <Board projectId={projectId} notify={notify}/> : tab === 'deliverables' ? <Deliverables projectId={projectId} items={records as Deliverable[]} user={user} refresh={load} notify={notify}/> : tab === 'bugs' ? <Bugs items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'team' ? <Team items={records as Member[]} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'github' ? <GitHub projectId={projectId} initial={records as GithubData[]} refresh={load} notify={notify}/> : <Traceability data={special}/>}</div>;
+  return <div className="space-y-6"><div className="flex items-start gap-3 text-sm text-slate-400"><Link to="/projects" className="hover:text-indigo-600">Projects</Link><ChevronRight size={16}/><span className="text-slate-700">{project?.name || 'Project workspace'}</span></div><section className="surface overflow-hidden"><div className="bg-[#17213a] p-6 text-white sm:p-8"><p className="eyebrow text-indigo-300">Project workspace</p><div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h1 className="text-3xl font-semibold tracking-tight">{project?.name || 'Loading project…'}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{project?.description || 'A shared view of planning, delivery, and evidence.'}</p></div><span className="badge bg-emerald-400/15 text-emerald-300">● Active delivery</span></div></div><div className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-white p-2">{tabs.map(t => <button key={t.key} onClick={() => setParams({ tab: t.key })} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${active.key === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}><t.icon size={15}/>{t.label}</button>)}</div></section>{error && <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={load} className="ml-3 font-semibold underline">Retry</button></div>}{notice && <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700"><Check size={16}/>{notice}</div>}{loading ? <div className="surface p-12 text-center text-sm text-slate-500">Loading {active.label.toLowerCase()}…</div> : tab === 'overview' ? <Overview stats={stats} items={records}/> : tab === 'requirements' ? <Requirements items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'backlog' ? <Backlog items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'sprints' ? <Sprints items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'tasks' ? <Tasks stories={records} refresh={load} notify={notify}/> : tab === 'board' ? <Board projectId={projectId} notify={notify}/> : tab === 'deliverables' ? <Deliverables projectId={projectId} items={records as Deliverable[]} user={user} refresh={load} notify={notify}/> : tab === 'bugs' ? <Bugs items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'team' ? <Team items={records as Member[]} project={project} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'github' ? <GitHub projectId={projectId} initial={records as GithubData[]} refresh={load} notify={notify}/> : <Traceability data={special}/>}</div>;
 };
 
 function extractRows(value: unknown, tab: string): Row[] {
@@ -58,7 +58,236 @@ const Bugs = ({ items, projectId, user, refresh, notify }: { items: Row[]; proje
 
 const Deliverables = ({ projectId, items, user, refresh, notify }: { projectId: string; items: Deliverable[]; user: User | null; refresh: () => void; notify: (s: string) => void }) => { const [milestones, setMilestones] = useState<Row[]>([]); const [modal, setModal] = useState(false); const [editing, setEditing] = useState<Deliverable | null>(null); const [form, setForm] = useState<Row>({ title: '', description: '', type: 'OTHER', fileUrl: '', dueDate: '', milestoneId: '' }); const [error, setError] = useState(''); useEffect(() => { get<unknown>(endpoints.milestones(projectId)).then(data => setMilestones(asList<Row>(data))).catch(() => setMilestones([])); }, [projectId]); const open = (item?: Deliverable) => { setError(''); setEditing(item || null); setForm(item || { title: '', description: '', type: 'OTHER', fileUrl: '', dueDate: '', milestoneId: milestones[0]?.id || '' }); setModal(true); }; const save = async (e: React.FormEvent) => { e.preventDefault(); try { if (editing) await patch(endpoints.deliverable(editing.id), form); else await post(`${endpoints.milestoneDeliverables(String(form.milestoneId))}`, form); setModal(false); notify('Deliverable saved'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save deliverable'); } }; return <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Milestones and evidence</p><h2 className="mt-1 text-xl font-semibold">Deliverables</h2></div>{['FACULTY','TEAM_LEAD','TEAM_MEMBER'].includes(user?.role || '') && <button className="btn-primary" onClick={() => open()}><Plus size={16}/> New deliverable</button>}</div><div className="mt-6 space-y-3">{items.map(item => <div key={item.id} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-col justify-between gap-3 sm:flex-row"><div><div className="flex items-center gap-2"><b>{String(item.title)}</b><Badge value={item.status || 'DRAFT'}/></div><p className="mt-1 text-sm text-slate-500">{String(item.description || 'No description')}</p><p className="mt-2 text-xs text-slate-400">Due {formatDate(String(item.dueDate || ''))} · {String(item.type || 'OTHER')}</p></div><div className="flex gap-2">{['FACULTY','TEAM_LEAD','TEAM_MEMBER'].includes(user?.role || '') && <><button className="btn-secondary px-3 py-1.5" onClick={() => open(item)}>Edit</button><button className="rounded-lg p-2 text-rose-500 hover:bg-rose-50" onClick={async () => { if (window.confirm("Delete this deliverable?")) { try { await del(endpoints.deliverable(item.id)); notify("Deliverable deleted"); refresh(); } catch (err) { setError(err instanceof Error ? err.message : "Could not delete deliverable"); } } }}><Trash2 size={16}/></button></>}{['TEAM_LEAD','TEAM_MEMBER'].includes(user?.role || '') && ['DRAFT','REVISION_REQUESTED'].includes(String(item.status || 'DRAFT')) && <button className="btn-secondary px-3 py-1.5" onClick={async () => { try { await post(`${endpoints.deliverable(item.id)}/submit`); notify('Deliverable submitted'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Submission failed'); } }}>Submit</button>}{user?.role === 'FACULTY' && item.status === 'SUBMITTED' && <button className="btn-secondary px-3 py-1.5" onClick={async () => { try { await post(`${endpoints.deliverable(item.id)}/review`, { action: 'START_REVIEW', feedback: '' }); notify('Review started'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Review start failed'); } }}>Start review</button>}{user?.role === 'FACULTY' && item.status === 'UNDER_REVIEW' && <><button className="btn-primary px-3 py-1.5" onClick={async () => { await post(`${endpoints.deliverable(item.id)}/review`, { action: 'APPROVE', feedback: '' }); notify('Deliverable approved'); refresh(); }}>Approve</button><button className="btn-secondary px-3 py-1.5" onClick={async () => { const feedback = window.prompt('Revision feedback'); if (feedback) { await post(`${endpoints.deliverable(item.id)}/review`, { action: 'REQUEST_REVISION', feedback }); notify('Revision requested'); refresh(); } }}>Request revision</button></>}</div></div></div>)}</div>{error && <ErrorText text={error}/>} {modal && <Modal title={editing ? 'Edit deliverable' : 'New deliverable'} close={() => setModal(false)}><form onSubmit={save} className="space-y-4"><Field label="Title" value={String(form.title || '')} onChange={v => setForm({...form,title:v})} required/><Textarea label="Description" value={String(form.description || '')} onChange={v => setForm({...form,description:v})}/><Field label="File URL" value={String(form.fileUrl || '')} onChange={v => setForm({...form,fileUrl:v})}/><div className="grid grid-cols-2 gap-3"><Field label="Due date" type="date" value={String(form.dueDate || '')} onChange={v => setForm({...form,dueDate:v})}/><Select label="Type" value={String(form.type || 'OTHER')} options={['SRS_DOCUMENT','DESIGN_DOCUMENT','REPORT','PRESENTATION','OTHER']} onChange={v => setForm({...form,type:v})}/></div>{!editing && <Select label="Milestone" value={String(form.milestoneId || '')} options={milestones.map(m => String(m.id))} onChange={v => setForm({...form,milestoneId:v})}/>} {error && <ErrorText text={error}/>}<button className="btn-primary w-full">Save deliverable</button></form></Modal>}</section>; };
 
-const Team = ({ items, projectId, user, refresh, notify }: { items: Member[]; projectId: string; user: User | null; refresh: () => void; notify: (s: string) => void }) => { const canManage = ['TEAM_LEAD','FACULTY'].includes(user?.role || ''); const [invitations, setInvitations] = useState<Row[]>([]); const loadInvitations = () => { get<unknown>(endpoints.invitations(projectId)).then(res => setInvitations(asList<Row>(res))).catch(() => setInvitations([])); }; useEffect(() => { loadInvitations(); }, [projectId]); const sendRequest = async () => { const email = window.prompt('Enter the student email to send a join request:'); if (!email) return; try { await post(endpoints.invitations(projectId), { email: email.trim(), role: 'TEAM_MEMBER' }); notify('Invitation request sent to student'); refresh(); loadInvitations(); } catch (err) { notify(err instanceof Error ? err.message : 'Could not send invitation request'); } }; const cancelRequest = async (invitationId: string) => { if (!window.confirm('Cancel this invitation request?')) return; try { await del(`${endpoints.invitations(projectId)}/${invitationId}`); notify('Invitation cancelled'); loadInvitations(); } catch (err) { notify(err instanceof Error ? err.message : 'Could not cancel invitation'); } }; return <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Collaboration</p><h2 className="mt-1 text-xl font-semibold">Team members</h2></div>{canManage && <button className="btn-primary" onClick={sendRequest}><Plus size={16}/> Send request</button>}</div><div className="mt-6 grid gap-3 md:grid-cols-2">{items.map(item => <div key={item.userId} className="flex items-center justify-between rounded-xl border border-slate-100 p-4"><div><p className="font-semibold">{item.user?.name || item.user?.email}</p><p className="text-xs text-slate-400">{item.user?.email} · {item.role || 'TEAM_MEMBER'}</p></div>{canManage && <div className="flex items-center gap-2"><select className="rounded-lg border border-slate-200 px-2 py-1 text-xs" value={item.role || 'TEAM_MEMBER'} onChange={async e => { await patch(`${endpoints.members(projectId)}/${item.userId}/role`, { role: e.target.value }); notify('Role updated'); refresh(); }}><option>TEAM_MEMBER</option><option>TEAM_LEAD</option></select><button className="text-xs font-semibold text-rose-600" onClick={async () => { if (window.confirm('Remove this member?')) { await del(`${endpoints.members(projectId)}/${item.userId}`); notify('Member removed'); refresh(); } }}>Remove</button></div>}</div>)}</div>{canManage && invitations.length > 0 && <div className="mt-8 border-t border-slate-100 pt-6"><div className="flex items-center gap-2"><h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Pending Requests</h3><span className="badge bg-amber-50 text-amber-700">{invitations.length}</span></div><div className="mt-4 grid gap-3 md:grid-cols-2">{invitations.map(inv => <div key={String(inv.id)} className="flex items-center justify-between rounded-xl border border-dashed border-amber-200 bg-amber-50/30 p-4"><div><p className="font-semibold text-slate-800">{String((inv.user as Row)?.name || (inv.user as Row)?.email || 'Invited student')}</p><p className="text-xs text-slate-400">{String((inv.user as Row)?.email || '')} · <span className="font-medium text-amber-600">Request sent (Pending approval)</span></p></div><button className="text-xs font-semibold text-slate-500 hover:text-rose-600" onClick={() => cancelRequest(String(inv.id))}>Cancel</button></div>)}</div></div>}</section>; };
+const Team = ({ items, project, projectId, user, refresh, notify }: { items: Member[]; project: Project | null; projectId: string; user: User | null; refresh: () => void; notify: (s: string) => void }) => {
+  const canManage = ['TEAM_LEAD', 'FACULTY'].includes(user?.role || '');
+  const [invitations, setInvitations] = useState<Row[]>([]);
+  const [facultyInvitations, setFacultyInvitations] = useState<Row[]>([]);
+
+  const loadInvitations = () => {
+    get<unknown>(endpoints.invitations(projectId))
+      .then((res) => setInvitations(asList<Row>(res)))
+      .catch(() => setInvitations([]));
+    get<unknown>(endpoints.facultyInvitations(projectId))
+      .then((res) => setFacultyInvitations(asList<Row>(res)))
+      .catch(() => setFacultyInvitations([]));
+  };
+
+  useEffect(() => {
+    loadInvitations();
+  }, [projectId]);
+
+  const sendRequest = async () => {
+    const email = window.prompt('Enter the student email to send a join request:');
+    if (!email) return;
+    try {
+      await post(endpoints.invitations(projectId), { email: email.trim(), role: 'TEAM_MEMBER' });
+      notify('Invitation request sent to student');
+      refresh();
+      loadInvitations();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not send invitation request');
+    }
+  };
+
+  const sendFacultyRequest = async () => {
+    const email = window.prompt('Enter the faculty advisor email to send a request:');
+    if (!email) return;
+    try {
+      await post(endpoints.facultyInvitations(projectId), { email: email.trim() });
+      notify('Faculty advisor request sent');
+      refresh();
+      loadInvitations();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not send faculty request');
+    }
+  };
+
+  const cancelRequest = async (invitationId: string) => {
+    if (!window.confirm('Cancel this invitation request?')) return;
+    try {
+      await del(`${endpoints.invitations(projectId)}/${invitationId}`);
+      notify('Invitation cancelled');
+      loadInvitations();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not cancel invitation');
+    }
+  };
+
+  const cancelFacultyRequest = async (invitationId: string) => {
+    if (!window.confirm('Cancel this faculty advisor request?')) return;
+    try {
+      await del(`${endpoints.facultyInvitations(projectId)}/${invitationId}`);
+      notify('Faculty request cancelled');
+      loadInvitations();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Could not cancel faculty request');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="surface p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="eyebrow">Guidance</p>
+            <h2 className="mt-1 text-xl font-semibold">Faculty advisor</h2>
+          </div>
+          {canManage && !project?.faculty && (
+            <button className="btn-primary" onClick={sendFacultyRequest}>
+              <Plus size={16} /> Request faculty advisor
+            </button>
+          )}
+        </div>
+
+        <div className="mt-6">
+          {project?.faculty ? (
+            <div className="flex items-center justify-between rounded-xl border border-slate-100 p-4">
+              <div>
+                <p className="font-semibold">{project.faculty.name || project.faculty.email}</p>
+                <p className="text-xs text-slate-400">{project.faculty.email} · Faculty Advisor</p>
+              </div>
+              <span className="badge bg-indigo-50 text-indigo-700">Assigned Advisor</span>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No faculty advisor assigned yet.</p>
+          )}
+        </div>
+
+        {canManage && facultyInvitations.length > 0 && (
+          <div className="mt-6 border-t border-slate-100 pt-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                Pending Faculty Requests
+              </h3>
+              <span className="badge bg-amber-50 text-amber-700">{facultyInvitations.length}</span>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {facultyInvitations.map((inv) => (
+                <div
+                  key={String(inv.id)}
+                  className="flex items-center justify-between rounded-xl border border-dashed border-amber-200 bg-amber-50/30 p-4"
+                >
+                  <div>
+                    <p className="font-semibold text-slate-800">
+                      {String((inv.user as Row)?.name || (inv.user as Row)?.email || 'Faculty member')}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {String((inv.user as Row)?.email || '')} ·{' '}
+                      <span className="font-medium text-amber-600">
+                        Request sent (Pending approval)
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    className="text-xs font-semibold text-slate-500 hover:text-rose-600"
+                    onClick={() => cancelFacultyRequest(String(inv.id))}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="surface p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="eyebrow">Collaboration</p>
+            <h2 className="mt-1 text-xl font-semibold">Team members</h2>
+          </div>
+          {canManage && (
+            <button className="btn-primary" onClick={sendRequest}>
+              <Plus size={16} /> Send request
+            </button>
+          )}
+        </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          {items.map((item) => (
+            <div
+              key={item.userId}
+              className="flex items-center justify-between rounded-xl border border-slate-100 p-4"
+            >
+              <div>
+                <p className="font-semibold">{item.user?.name || item.user?.email}</p>
+                <p className="text-xs text-slate-400">
+                  {item.user?.email} · {item.role || 'TEAM_MEMBER'}
+                </p>
+              </div>
+              {canManage && (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                    value={item.role || 'TEAM_MEMBER'}
+                    onChange={async (e) => {
+                      await patch(`${endpoints.members(projectId)}/${item.userId}/role`, {
+                        role: e.target.value,
+                      });
+                      notify('Role updated');
+                      refresh();
+                    }}
+                  >
+                    <option>TEAM_MEMBER</option>
+                    <option>TEAM_LEAD</option>
+                  </select>
+                  <button
+                    className="text-xs font-semibold text-rose-600"
+                    onClick={async () => {
+                      if (window.confirm('Remove this member?')) {
+                        await del(`${endpoints.members(projectId)}/${item.userId}`);
+                        notify('Member removed');
+                        refresh();
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {canManage && invitations.length > 0 && (
+          <div className="mt-8 border-t border-slate-100 pt-6">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                Pending Requests
+              </h3>
+              <span className="badge bg-amber-50 text-amber-700">{invitations.length}</span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {invitations.map((inv) => (
+                <div
+                  key={String(inv.id)}
+                  className="flex items-center justify-between rounded-xl border border-dashed border-amber-200 bg-amber-50/30 p-4"
+                >
+                  <div>
+                    <p className="font-semibold text-slate-800">
+                      {String((inv.user as Row)?.name || (inv.user as Row)?.email || 'Invited student')}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {String((inv.user as Row)?.email || '')} ·{' '}
+                      <span className="font-medium text-amber-600">
+                        Request sent (Pending approval)
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    className="text-xs font-semibold text-slate-500 hover:text-rose-600"
+                    onClick={() => cancelRequest(String(inv.id))}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
 
 const GitHub = ({ projectId, initial, refresh, notify }: { projectId: string; initial: GithubData[]; refresh: () => Promise<void>; notify: (s: string) => void }) => { const [section, setSection] = useState('connection'); const [data, setData] = useState<GithubData[]>(initial); const [error, setError] = useState(''); const [form, setForm] = useState({ repoOwner: '', repoName: '' }); const load = async (name: string) => { setSection(name); setError(''); try { const result = await get<unknown>(name === 'connection' ? endpoints.github(projectId) : `${endpoints.github(projectId)}/${name}`); setData(githubRows(result, name)); } catch (err) { setData([]); setError(err instanceof Error ? err.message : 'GitHub request failed'); } }; const connect = async (e: React.FormEvent) => { e.preventDefault(); try { await post(`${endpoints.github(projectId)}/connect`, form); notify('Repository connected'); await refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not connect repository'); } }; const disconnect = async () => { if (window.confirm('Disconnect this repository?')) { try { await del(`${endpoints.github(projectId)}/disconnect`); notify('Repository disconnected'); setData([]); } catch (err) { setError(err instanceof Error ? err.message : 'Could not disconnect repository'); } } }; return <section className="surface p-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="eyebrow">Repository intelligence</p><h2 className="mt-1 text-xl font-semibold">GitHub integration</h2></div><div className="flex flex-wrap gap-2">{['connection','commits','branches','pulls','contributors'].map(key => <button key={key} onClick={() => load(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize ${section === key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{key}</button>)}</div></div>{error && <ErrorText text={error}/>}<div className="mt-6">{section === 'connection' && <>{data[0]?.repoName ? <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-6"><div><p className="font-semibold">{data[0].repoOwner}/{data[0].repoName}</p><p className="mt-1 text-sm text-slate-500">Default branch: {data[0].defaultBranch || 'main'}</p></div><button className="btn-secondary" onClick={disconnect}>Disconnect</button></div> : <form onSubmit={connect} className="grid gap-3 rounded-2xl bg-slate-50 p-6 sm:grid-cols-3"><Field label="Owner (optional when pasting a URL)" value={form.repoOwner} onChange={v => setForm({...form,repoOwner:v})}/><Field label="Repository name or GitHub URL" value={form.repoName} onChange={v => setForm({...form,repoName:v})} required/><button className="btn-primary self-end">Connect repository</button></form>}</>}{section !== 'connection' && <div className="grid gap-3 md:grid-cols-2">{data.length ? data.map((item, i) => { const author = item.author as Row | undefined; const actor = item.user as Row | undefined; return <div key={String(item.id || i)} className="rounded-xl border border-slate-100 p-4"><p className="font-semibold">{String(item.title || item.name || item.message || item.username || 'GitHub activity')}</p><p className="mt-2 text-sm text-slate-500">{String(author?.username || author?.name || actor?.username || item.contributions || item.state || item.sha || 'Repository data')}</p><p className="mt-1 text-xs text-slate-400">{formatDate(String(item.createdAt || item.date || ''))}</p></div>; }) : <p className="py-10 text-center text-sm text-slate-500">No {section} data returned.</p>}</div>}</div></section>; };
 

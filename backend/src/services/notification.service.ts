@@ -589,7 +589,7 @@ export class NotificationService {
     };
   }
 
-  public static async respondToInvitation(
+    public static async respondToInvitation(
     notificationId: string,
     action: 'ACCEPT' | 'REJECT',
     user: { id: string; name?: string; email?: string; role: Role }
@@ -610,8 +610,8 @@ export class NotificationService {
       throw new AppError('Access denied: cannot respond to another user\'s notification', 403);
     }
 
-    if (notification.entityType !== 'TEAM_INVITATION') {
-      throw new AppError('This notification is not a team invitation', 400);
+    if (notification.entityType !== 'TEAM_INVITATION' && notification.entityType !== 'FACULTY_INVITATION') {
+      throw new AppError('This notification is not an invitation', 400);
     }
 
     if (notification.entityId !== 'PENDING') {
@@ -638,8 +638,72 @@ export class NotificationService {
       throw new AppError('Project or project team no longer exists', 404);
     }
 
-    const studentName = user.name || user.email || 'A student';
     const leaderId = project.team.leadId;
+
+    if (notification.entityType === 'FACULTY_INVITATION') {
+      const facultyName = user.name || user.email || 'Faculty advisor';
+
+      if (action === 'ACCEPT') {
+        await prisma.project.update({
+          where: { id: project.id },
+          data: { facultyId: user.id },
+        });
+
+        const updated = await prisma.notification.update({
+          where: { id: notificationId },
+          data: {
+            entityId: 'ACCEPTED',
+            title: 'Faculty Advisor Request (Accepted)',
+            message: `${notification.message} - Request accepted`,
+            read: true,
+            readAt: new Date(),
+          },
+        });
+
+        if (leaderId && leaderId !== user.id) {
+          await prisma.notification.create({
+            data: {
+              userId: leaderId,
+              title: 'Faculty Request Accepted',
+              message: `${facultyName} accepted to advise ${project.name}`,
+              type: NotificationType.GENERAL,
+              entityType: 'FACULTY_INVITATION_RESPONSE',
+              projectId: project.id,
+            },
+          });
+        }
+
+        return updated;
+      } else {
+        const updated = await prisma.notification.update({
+          where: { id: notificationId },
+          data: {
+            entityId: 'REJECTED',
+            title: 'Faculty Advisor Request (Declined)',
+            message: `${notification.message} - Request not accepted`,
+            read: true,
+            readAt: new Date(),
+          },
+        });
+
+        if (leaderId && leaderId !== user.id) {
+          await prisma.notification.create({
+            data: {
+              userId: leaderId,
+              title: 'Faculty Request Declined',
+              message: `${facultyName} declined to advise ${project.name}`,
+              type: NotificationType.GENERAL,
+              entityType: 'FACULTY_INVITATION_RESPONSE',
+              projectId: project.id,
+            },
+          });
+        }
+
+        return updated;
+      }
+    }
+
+    const studentName = user.name || user.email || 'A student';
 
     if (action === 'ACCEPT') {
       const alreadyMember = project.team.members.some((m) => m.userId === user.id);
