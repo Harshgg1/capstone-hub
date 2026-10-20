@@ -103,7 +103,7 @@ const Requirements = ({ items, projectId, user, refresh, notify }: { items: Row[
 
 const Backlog = ({ items, projectId, refresh, notify }: { items: Row[]; projectId: string; refresh: () => void; notify: (s: string) => void }) => <CrudList title="Product backlog" addLabel="New story" items={items} onAdd={async data => { await post(`/projects/${projectId}/backlog`, data); notify('Story added to backlog'); refresh(); }} onUpdate={async (item, data) => { await put(endpoints.story(String(item.id)), data); notify('Story updated'); refresh(); }} onDelete={async item => { await del(endpoints.story(String(item.id))); notify('Story deleted'); refresh(); }} fields={<StoryFields/>} render={item => <><div className="flex items-center gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700">{String(item.storyPoints ?? '—')}</span><b>{String(item.title)}</b><Badge value={item.priority || 'MEDIUM'}/></div><p className="mt-2 text-sm text-slate-500">{String(item.description || 'No description')}</p></>}/>;
 
-const Sprints = ({ items, projectId, refresh, notify }: { items: Row[]; projectId: string; refresh: () => void; notify: (s: string) => void }) => <CrudList title="Sprints" addLabel="Create sprint" items={items} onAdd={async data => { await post(endpoints.sprints(projectId), data); notify('Sprint created'); refresh(); }} onUpdate={async (item, data) => { await patch(endpoints.sprint(String(item.id)), data); notify('Sprint updated'); refresh(); }} onDelete={async item => { await del(endpoints.sprint(String(item.id))); notify('Sprint deleted'); refresh(); }} fields={<SprintFields/>} render={item => <><div className="flex items-center justify-between"><b>{String(item.name)}</b><Badge value={item.status || 'PLANNED'}/></div><p className="mt-2 text-sm text-slate-500">{formatDate(String(item.startDate))} — {formatDate(String(item.endDate))}</p></> } actions={item => <>{item.status === 'PLANNED' && <button className="btn-secondary px-3 py-1.5" onClick={async () => { await patch(endpoints.sprint(String(item.id)), { status: 'ACTIVE' }); notify('Sprint started'); refresh(); }}>Start sprint</button>}{item.status === 'ACTIVE' && <button className="btn-secondary px-3 py-1.5" onClick={async () => { await patch(endpoints.sprint(String(item.id)), { status: 'COMPLETED' }); notify('Sprint completed'); refresh(); }}>Complete</button>}</>}/>;
+const Sprints = ({ items, projectId, refresh, notify }: { items: Row[]; projectId: string; refresh: () => void; notify: (s: string) => void }) => <CrudList title="Sprints" addLabel="Create sprint" items={items} onAdd={async data => { await post(endpoints.sprints(projectId), data); notify('Sprint created'); refresh(); }} onUpdate={async (item, data) => { await patch(endpoints.sprint(String(item.id)), data); notify('Sprint updated'); refresh(); }} onDelete={async item => { await del(endpoints.sprint(String(item.id))); notify('Sprint deleted'); refresh(); }} fields={<SprintFields/>} render={item => <><div className="flex items-center justify-between"><b>{String(item.name)}</b><Badge value={item.status || 'PLANNED'}/></div><p className="mt-2 text-sm text-slate-500">{formatDate(item.startDate)} — {formatDate(item.endDate)}</p></> } actions={item => <>{item.status === 'PLANNED' && <button className="btn-secondary px-3 py-1.5" onClick={async () => { await patch(endpoints.sprint(String(item.id)), { status: 'ACTIVE' }); notify('Sprint started'); refresh(); }}>Start sprint</button>}{item.status === 'ACTIVE' && <button className="btn-secondary px-3 py-1.5" onClick={async () => { await patch(endpoints.sprint(String(item.id)), { status: 'COMPLETED' }); notify('Sprint completed'); refresh(); }}>Complete</button>}</>}/>;
 
 const Tasks = ({ stories, refresh, notify }: { stories: Row[]; refresh: () => void; notify: (s: string) => void }) => { const [modal, setModal] = useState<{ storyId: string; task?: Task } | null>(null); const [error, setError] = useState(''); const [form, setForm] = useState<Row>({ title: '', description: '', status: 'TODO', assigneeId: '', sprintId: '' }); const open = (storyId: string, task?: Task) => { setError(''); setForm(task || { title: '', description: '', status: 'TODO', assigneeId: '', sprintId: '' }); setModal({ storyId, task }); }; const save = async (e: React.FormEvent) => { e.preventDefault(); try { const saved = modal?.task ? await patch<Task>(endpoints.task(modal.task.id), { ...form, sprintId: undefined }) : await post<Task>(endpoints.storyTasks(modal?.storyId || ''), { ...form, sprintId: undefined }); const taskId = String(saved.id || modal?.task?.id || ''); if (form.sprintId) await patch(`${endpoints.task(taskId)}/sprint`, { sprintId: form.sprintId }); else if (modal?.task?.sprintId) await del(`${endpoints.task(taskId)}/sprint`); setModal(null); notify('Task saved'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save task'); } }; const remove = async (task: Task) => { if (window.confirm('Delete this task?')) { try { await del(endpoints.task(task.id)); notify('Task deleted'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not delete task'); } } }; return <section className="surface p-6"><p className="eyebrow">Execution details</p><h2 className="mt-1 text-xl font-semibold">Tasks by user story</h2><div className="mt-6 space-y-4">{stories.map(story => <div key={String(story.id || (story.userStory as Row)?.id)} className="rounded-xl border border-slate-100 p-4"><div className="flex items-center justify-between"><b>{String(story.title)}</b><button className="btn-secondary px-3 py-1.5" onClick={() => open(String(story.id))}><Plus size={14}/> Add task</button></div><div className="mt-3 space-y-2">{asList<Task>(story.tasks).map(task => <div key={task.id} className="flex flex-col justify-between gap-2 rounded-lg bg-slate-50 p-3 sm:flex-row sm:items-center"><div><p className="font-medium">{task.title}</p><p className="text-xs text-slate-400">{task.assignee?.name || 'Unassigned'} · {String(task.sprint?.name || 'No sprint')}</p></div><div className="flex items-center gap-2"><Badge value={task.status}/><button className="text-xs font-semibold text-indigo-600" onClick={() => open(String(story.id), task)}>Edit</button><button className="text-xs font-semibold text-rose-600" onClick={() => remove(task)}>Delete</button></div></div>)}</div></div>)}</div>{!stories.length && <p className="py-12 text-center text-sm text-slate-500">No user stories available for tasks.</p>}{modal && <Modal title={modal.task ? 'Edit task' : 'New task'} close={() => setModal(null)}><form onSubmit={save} className="space-y-4"><Field label="Title" value={String(form.title || '')} onChange={v => setForm({...form, title: v})} required/><Textarea label="Description" value={String(form.description || '')} onChange={v => setForm({...form, description: v})}/><Select label="Status" value={String(form.status || 'TODO')} options={taskStatuses} onChange={v => setForm({...form, status: v})}/><Field label="Assignee user ID (optional)" value={String(form.assigneeId || '')} onChange={v => setForm({...form, assigneeId: v})}/><Field label="Sprint ID (optional)" value={String(form.sprintId || '')} onChange={v => setForm({...form, sprintId: v})}/>{error && <ErrorText text={error}/>}<button className="btn-primary w-full">Save task</button></form></Modal>}</section>; };
 
@@ -1042,7 +1042,70 @@ const Traceability = ({
 
 const CrudList = ({ title, addLabel, items, onAdd, onUpdate, onDelete, fields, render, actions, canAdd = true }: { title: string; addLabel: string; items: Row[]; onAdd: (data: Row) => Promise<void>; onUpdate: (item: Row, data: Row) => Promise<void>; onDelete: (item: Row) => Promise<void>; fields: React.ReactNode; render: (item: Row) => React.ReactNode; actions?: (item: Row) => React.ReactNode; canAdd?: boolean }) => { const [editing, setEditing] = useState<Row | null>(null); const [form, setForm] = useState<Row>({}); const [error, setError] = useState(''); const open = (item?: Row) => { setError(''); setEditing(item || {}); setForm(item || {}); }; const save = async (e: React.FormEvent) => { e.preventDefault(); try { if (editing?.id) await onUpdate(editing, form); else await onAdd(form); setEditing(null); } catch (err) { setError(err instanceof Error ? err.message : 'Request failed'); } }; return <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Project operations</p><h2 className="mt-1 text-xl font-semibold">{title}</h2></div>{canAdd && <button className="btn-primary" onClick={() => open()}><Plus size={16}/>{addLabel}</button>}</div>{items.length ? <div className="mt-6 space-y-3">{items.map((item, i) => <div key={String(item.id || i)} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="min-w-0 flex-1">{render(item)}</div><div className="flex shrink-0 items-center gap-2"><button className="btn-secondary px-3 py-1.5" onClick={() => open(item)}>Edit</button>{actions?.(item)}<button className="rounded-lg p-2 text-rose-500 hover:bg-rose-50" onClick={async () => { if (window.confirm(`Delete this ${title.toLowerCase().slice(0, -1)}?`)) await onDelete(item); }}><Trash2 size={16}/></button></div></div></div>)}</div> : <div className="py-14 text-center text-sm text-slate-500">No {title.toLowerCase()} yet.</div>}{editing && <Modal title={editing.id ? `Edit ${title.slice(0, -1).toLowerCase()}` : addLabel} close={() => setEditing(null)}><form onSubmit={save} className="space-y-4"><FormContext.Provider value={{ form, setForm }}>{fields}</FormContext.Provider>{error && <ErrorText text={error}/>}<button className="btn-primary w-full"><Save size={15}/> Save changes</button></form></Modal>}</section>; };
 
-const RequirementLinks = ({ requirementId, stories, notify, refresh }: { requirementId: string; stories: Row[]; notify: (s: string) => void; refresh: () => void }) => { const [linked, setLinked] = useState<Row[]>([]); const [selected, setSelected] = useState(''); const load = () => get<unknown>(endpoints.requirementStories(requirementId)).then(data => setLinked(asList<Row>(data))).catch(() => setLinked([])); useEffect(() => { load(); }, [requirementId]); return <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Linked stories</p><div className="mt-2 flex flex-wrap gap-2">{linked.map(story => <span key={String(story.id)} className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs text-slate-700">{String(story.title || (story.userStory as Row)?.title)}<button onClick={async () => { await del(`/requirements/${requirementId}/stories/${String(story.id || (story.userStory as Row)?.id)}`); notify('Story unlinked'); load(); refresh(); }} className="text-rose-500"><X size={12}/></button></span>)}{!linked.length && <span className="text-xs text-slate-400">No stories linked</span>}</div>{stories.length > linked.length && <div className="mt-2 flex gap-2"><select className="input py-1 text-xs" value={selected} onChange={e => setSelected(e.target.value)}><option value="">Link a story…</option>{stories.filter(story => !linked.some(item => String(item.id || (item.userStory as Row)?.id) === String(story.id))).map(story => <option key={String(story.id)} value={String(story.id)}>{String(story.title)}</option>)}</select><button disabled={!selected} className="btn-secondary px-2 py-1 text-xs" onClick={async () => { await post(`/requirements/${requirementId}/stories`, { userStoryId: selected }); notify('Story linked'); setSelected(''); load(); refresh(); }}>Link</button></div>}</div>; };
+const RequirementLinks = ({ requirementId, stories, notify, refresh }: { requirementId: string; stories: Row[]; notify: (s: string) => void; refresh: () => void }) => {
+  const [linked, setLinked] = useState<Row[]>([]);
+  const [selected, setSelected] = useState('');
+  const load = () => get<unknown>(endpoints.requirementStories(requirementId)).then(data => setLinked(asList<Row>(data))).catch(() => setLinked([]));
+  useEffect(() => { load(); }, [requirementId]);
+  return (
+    <div className="mt-3 rounded-lg bg-slate-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Linked stories</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {linked.map((story, idx) => {
+          const storyId = String((story.userStory as Row)?.id || story.id || story.linkId || idx);
+          const storyTitle = String((story.userStory as Row)?.title || story.title || 'Untitled Story');
+          const unlinkId = String((story.userStory as Row)?.id || story.id || story.linkId);
+          return (
+            <span key={storyId} className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs text-slate-700">
+              {storyTitle}
+              <button
+                type="button"
+                onClick={async () => {
+                  await del(`/requirements/${requirementId}/stories/${unlinkId}`);
+                  notify('Story unlinked');
+                  load();
+                  refresh();
+                }}
+                className="text-rose-500"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          );
+        })}
+        {!linked.length && <span className="text-xs text-slate-400">No stories linked</span>}
+      </div>
+      {stories.length > linked.length && (
+        <div className="mt-2 flex gap-2">
+          <select className="input py-1 text-xs" value={selected} onChange={e => setSelected(e.target.value)}>
+            <option value="">Link a story…</option>
+            {stories
+              .filter(story => !linked.some(item => String((item.userStory as Row)?.id || item.id || item.linkId) === String(story.id)))
+              .map(story => (
+                <option key={String(story.id)} value={String(story.id)}>
+                  {String(story.title)}
+                </option>
+              ))}
+          </select>
+          <button
+            type="button"
+            disabled={!selected}
+            className="btn-secondary px-2 py-1 text-xs"
+            onClick={async () => {
+              await post(`/requirements/${requirementId}/stories`, { userStoryId: selected });
+              notify('Story linked');
+              setSelected('');
+              load();
+              refresh();
+            }}
+          >
+            Link
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 type FormContextValue = { form: Row; setForm: React.Dispatch<React.SetStateAction<Row>> };
 const FormContext = React.createContext<FormContextValue | null>(null);
 const Field = ({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) => <label className="block text-sm font-medium text-slate-700">{label}<input className="input mt-1.5" type={type} required={required} value={value} onChange={e => onChange(e.target.value)}/></label>;

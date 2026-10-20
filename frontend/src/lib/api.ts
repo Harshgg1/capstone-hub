@@ -45,7 +45,18 @@ export function asList<T>(value: unknown): T[] {
   return [];
 }
 
-export const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value)) : '—';
+export const formatDate = (value?: unknown): string => {
+  if (!value || value === 'undefined' || value === 'null') return '—';
+  const str = value instanceof Date ? value.toISOString() : String(value).trim();
+  if (!str || str === 'undefined' || str === 'null') return '—';
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return '—';
+  try {
+    return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
+  } catch {
+    return '—';
+  }
+};
 export const initials = (name = '') => name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'CH';
 export const tone = (value = '') => value.toLowerCase().replace(/_/g, ' ');
 
