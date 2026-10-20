@@ -1043,12 +1043,98 @@ const Traceability = ({
 const CrudList = ({ title, addLabel, items, onAdd, onUpdate, onDelete, fields, render, actions, canAdd = true }: { title: string; addLabel: string; items: Row[]; onAdd: (data: Row) => Promise<void>; onUpdate: (item: Row, data: Row) => Promise<void>; onDelete: (item: Row) => Promise<void>; fields: React.ReactNode; render: (item: Row) => React.ReactNode; actions?: (item: Row) => React.ReactNode; canAdd?: boolean }) => { const [editing, setEditing] = useState<Row | null>(null); const [form, setForm] = useState<Row>({}); const [error, setError] = useState(''); const open = (item?: Row) => { setError(''); setEditing(item || {}); setForm(item || {}); }; const save = async (e: React.FormEvent) => { e.preventDefault(); try { if (editing?.id) await onUpdate(editing, form); else await onAdd(form); setEditing(null); } catch (err) { setError(err instanceof Error ? err.message : 'Request failed'); } }; return <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Project operations</p><h2 className="mt-1 text-xl font-semibold">{title}</h2></div>{canAdd && <button className="btn-primary" onClick={() => open()}><Plus size={16}/>{addLabel}</button>}</div>{items.length ? <div className="mt-6 space-y-3">{items.map((item, i) => <div key={String(item.id || i)} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="min-w-0 flex-1">{render(item)}</div><div className="flex shrink-0 items-center gap-2"><button className="btn-secondary px-3 py-1.5" onClick={() => open(item)}>Edit</button>{actions?.(item)}<button className="rounded-lg p-2 text-rose-500 hover:bg-rose-50" onClick={async () => { if (window.confirm(`Delete this ${title.toLowerCase().slice(0, -1)}?`)) await onDelete(item); }}><Trash2 size={16}/></button></div></div></div>)}</div> : <div className="py-14 text-center text-sm text-slate-500">No {title.toLowerCase()} yet.</div>}{editing && <Modal title={editing.id ? `Edit ${title.slice(0, -1).toLowerCase()}` : addLabel} close={() => setEditing(null)}><form onSubmit={save} className="space-y-4"><FormContext.Provider value={{ form, setForm }}>{fields}</FormContext.Provider>{error && <ErrorText text={error}/>}<button className="btn-primary w-full"><Save size={15}/> Save changes</button></form></Modal>}</section>; };
 
 const RequirementLinks = ({ requirementId, stories, notify, refresh }: { requirementId: string; stories: Row[]; notify: (s: string) => void; refresh: () => void }) => { const [linked, setLinked] = useState<Row[]>([]); const [selected, setSelected] = useState(''); const load = () => get<unknown>(endpoints.requirementStories(requirementId)).then(data => setLinked(asList<Row>(data))).catch(() => setLinked([])); useEffect(() => { load(); }, [requirementId]); return <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Linked stories</p><div className="mt-2 flex flex-wrap gap-2">{linked.map(story => <span key={String(story.id)} className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs text-slate-700">{String(story.title || (story.userStory as Row)?.title)}<button onClick={async () => { await del(`/requirements/${requirementId}/stories/${String(story.id || (story.userStory as Row)?.id)}`); notify('Story unlinked'); load(); refresh(); }} className="text-rose-500"><X size={12}/></button></span>)}{!linked.length && <span className="text-xs text-slate-400">No stories linked</span>}</div>{stories.length > linked.length && <div className="mt-2 flex gap-2"><select className="input py-1 text-xs" value={selected} onChange={e => setSelected(e.target.value)}><option value="">Link a story…</option>{stories.filter(story => !linked.some(item => String(item.id || (item.userStory as Row)?.id) === String(story.id))).map(story => <option key={String(story.id)} value={String(story.id)}>{String(story.title)}</option>)}</select><button disabled={!selected} className="btn-secondary px-2 py-1 text-xs" onClick={async () => { await post(`/requirements/${requirementId}/stories`, { userStoryId: selected }); notify('Story linked'); setSelected(''); load(); refresh(); }}>Link</button></div>}</div>; };
-
-
-
-type FormContextValue = { form: Row; setForm: React.Dispatch<React.SetStateAction<Row>> }; const FormContext = React.createContext<FormContextValue | null>(null); const Field = ({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) => <label className="block text-sm font-medium text-slate-700">{label}<input className="input mt-1.5" type={type} required={required} value={value} onChange={e => onChange(e.target.value)}/></label>; const Textarea = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => <label className="block text-sm font-medium text-slate-700">{label}<textarea className="input mt-1.5 min-h-24" value={value} onChange={e => onChange(e.target.value)}/></label>; const Select = ({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) => <label className="block text-sm font-medium text-slate-700">{label}<select className="input mt-1.5" value={value} onChange={e => onChange(e.target.value)}>{options.map(option => <option key={option}>{option}</option>)}</select></label>;
+type FormContextValue = { form: Row; setForm: React.Dispatch<React.SetStateAction<Row>> };
+const FormContext = React.createContext<FormContextValue | null>(null);
+const Field = ({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) => <label className="block text-sm font-medium text-slate-700">{label}<input className="input mt-1.5" type={type} required={required} value={value} onChange={e => onChange(e.target.value)}/></label>;
+const Textarea = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => <label className="block text-sm font-medium text-slate-700">{label}<textarea className="input mt-1.5 min-h-24" value={value} onChange={e => onChange(e.target.value)}/></label>;
+const Select = ({ label, value, options, onChange }: { label: string; value: string; options: (string | { value: string; label: string })[]; onChange: (value: string) => void }) => (
+  <label className="block text-sm font-medium text-slate-700">
+    {label}
+    <select className="input mt-1.5" value={value} onChange={e => onChange(e.target.value)}>
+      {options.map((opt, i) => {
+        const val = typeof opt === 'string' ? opt : opt.value;
+        const lab = typeof opt === 'string' ? opt : opt.label;
+        return <option key={`${val}-${i}`} value={val}>{lab}</option>;
+      })}
+    </select>
+  </label>
+);
 const RequirementFields = () => { const c = React.useContext(FormContext)!; return <><Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/><Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/><div className="grid grid-cols-2 gap-3"><Select label="Type" value={String(c.form.type || 'FUNCTIONAL')} options={['FUNCTIONAL','NON_FUNCTIONAL']} onChange={v => c.setForm({...c.form,type:v})}/><Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/></div></>; };
 const StoryFields = () => { const c = React.useContext(FormContext)!; return <><Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/><Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/><div className="grid grid-cols-2 gap-3"><Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/><Field label="Story points" type="number" value={String(c.form.storyPoints || '')} onChange={v => c.setForm({...c.form,storyPoints:Number(v)})}/></div></>; };
 const SprintFields = () => { const c = React.useContext(FormContext)!; return <><Field label="Sprint name" value={String(c.form.name || '')} onChange={v => c.setForm({...c.form,name:v})} required/><div className="grid grid-cols-2 gap-3"><Field label="Start date" type="date" value={String(c.form.startDate || '')} onChange={v => c.setForm({...c.form,startDate:v})} required/><Field label="End date" type="date" value={String(c.form.endDate || '')} onChange={v => c.setForm({...c.form,endDate:v})} required/></div><Select label="Status" value={String(c.form.status || 'PLANNED')} options={['PLANNED','ACTIVE','COMPLETED']} onChange={v => c.setForm({...c.form,status:v})}/></>; };
-const BugFields = ({ requirements = [], stories = [], tasks = [], sprints = [], members = [] }: { requirements?: Row[]; stories?: Row[]; tasks?: Row[]; sprints?: Row[]; members?: Row[] }) => { const c = React.useContext(FormContext)!; return <><Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/><Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/><div className="grid grid-cols-2 gap-3"><Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/><Select label="Severity" value={String(c.form.severity || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,severity:v})}/></div><Select label="Status" value={String(c.form.status || 'OPEN')} options={['OPEN','IN_PROGRESS','RESOLVED','CLOSED']} onChange={v => c.setForm({...c.form,status:v})}/><Select label="Assignee" value={String(c.form.assigneeId || '')} options={['', ...members.map(item => String(item.userId || (item.user as Row)?.id || item.id))]} onChange={v => c.setForm({...c.form,assigneeId:v || null})}/><Select label="Requirement" value={String(c.form.requirementId || '')} options={['', ...requirements.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,requirementId:v || null})}/><Select label="User story" value={String(c.form.userStoryId || '')} options={['', ...stories.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,userStoryId:v || null})}/><Select label="Task" value={String(c.form.taskId || '')} options={['', ...tasks.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,taskId:v || null})}/><Select label="Sprint" value={String(c.form.sprintId || '')} options={['', ...sprints.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,sprintId:v || null})}/><Field label="Pull request URL (optional)" value={String(c.form.pullRequestUrl || '')} onChange={v => c.setForm({...c.form,pullRequestUrl:v})}/><Field label="PR number (optional)" type="number" value={String(c.form.prNumber || '')} onChange={v => c.setForm({...c.form,prNumber:v ? Number(v) : null})}/></>; };
-const Modal = ({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) => <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"><div className="surface w-full max-w-lg p-6"><div className="flex items-center justify-between"><h3 className="text-xl font-semibold">{title}</h3><button onClick={close}><X className="text-slate-400" size={19}/></button></div><div className="mt-6">{children}</div></div></div>; const ErrorText = ({ text }: { text: string }) => <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">{text}</div>;
+const BugFields = ({ requirements = [], stories = [], tasks = [], sprints = [], members = [] }: { requirements?: Row[]; stories?: Row[]; tasks?: Row[]; sprints?: Row[]; members?: Row[] }) => {
+  const c = React.useContext(FormContext)!;
+  const memberOptions = [
+    { value: '', label: 'Unassigned' },
+    ...members.map(item => {
+      const u = (item.user || {}) as Row;
+      const id = String(item.userId || u.id || item.id || '');
+      const name = String(u.name || item.name || '');
+      const email = String(u.email || item.email || '');
+      const label = name && email ? `${name} (${email})` : (name || email || id);
+      return { value: id, label };
+    }).filter(opt => Boolean(opt.value))
+  ];
+  const reqOptions = [
+    { value: '', label: 'None' },
+    ...requirements.map(item => ({
+      value: String(item.id),
+      label: String(item.title || item.id)
+    }))
+  ];
+  const storyOptions = [
+    { value: '', label: 'None' },
+    ...stories.map(item => ({
+      value: String(item.id),
+      label: String(item.title || item.id)
+    }))
+  ];
+  const taskOptions = [
+    { value: '', label: 'None' },
+    ...tasks.map(item => ({
+      value: String(item.id),
+      label: String(item.title || item.id)
+    }))
+  ];
+  const sprintOptions = [
+    { value: '', label: 'None' },
+    ...sprints.map(item => ({
+      value: String(item.id),
+      label: String(item.name || item.id)
+    }))
+  ];
+  return (
+    <>
+      <Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/>
+      <Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/>
+      <div className="grid grid-cols-2 gap-3">
+        <Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/>
+        <Select label="Severity" value={String(c.form.severity || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,severity:v})}/>
+      </div>
+      <Select label="Status" value={String(c.form.status || 'OPEN')} options={['OPEN','IN_PROGRESS','RESOLVED','CLOSED']} onChange={v => c.setForm({...c.form,status:v})}/>
+      <Select label="Assignee" value={String(c.form.assigneeId || '')} options={memberOptions} onChange={v => c.setForm({...c.form,assigneeId:v || null})}/>
+      <Select label="Requirement" value={String(c.form.requirementId || '')} options={reqOptions} onChange={v => c.setForm({...c.form,requirementId:v || null})}/>
+      <Select label="User story" value={String(c.form.userStoryId || '')} options={storyOptions} onChange={v => c.setForm({...c.form,userStoryId:v || null})}/>
+      <Select label="Task" value={String(c.form.taskId || '')} options={taskOptions} onChange={v => c.setForm({...c.form,taskId:v || null})}/>
+      <Select label="Sprint" value={String(c.form.sprintId || '')} options={sprintOptions} onChange={v => c.setForm({...c.form,sprintId:v || null})}/>
+      <Field label="Pull request URL (optional)" value={String(c.form.pullRequestUrl || '')} onChange={v => c.setForm({...c.form,pullRequestUrl:v})}/>
+      <Field label="PR number (optional)" type="number" value={String(c.form.prNumber || '')} onChange={v => c.setForm({...c.form,prNumber:v ? Number(v) : null})}/>
+    </>
+  );
+};
+const Modal = ({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs overflow-y-auto">
+    <div className="surface flex w-full max-w-lg max-h-[90vh] flex-col p-6 my-auto shadow-2xl">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 pb-3">
+        <h3 className="text-xl font-semibold">{title}</h3>
+        <button type="button" onClick={close} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+          <X size={19}/>
+        </button>
+      </div>
+      <div className="mt-4 flex-1 overflow-y-auto pr-1">
+        {children}
+      </div>
+    </div>
+  </div>
+);
+const ErrorText = ({ text }: { text: string }) => <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">{text}</div>;
