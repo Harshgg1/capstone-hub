@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Bug, Check, CheckCircle2, ChevronRight, CircleDot, FileCheck2, GitBranch, Layers3, ListChecks, Network, Plus, RefreshCw, Save, Trash2, Users, X } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { asList, del, endpoints, formatDate, get, patch, post, Project, put, User } from '../lib/api';
@@ -17,13 +17,52 @@ const taskStatuses = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
 export const ProjectWorkspacePage: React.FC = () => {
   const { projectId = '' } = useParams(); const [params, setParams] = useSearchParams(); const tab = params.get('tab') || 'overview'; const { user } = useAuth();
-  const [project, setProject] = useState<Project | null>(null); const [records, setRecords] = useState<Row[]>([]); const [special, setSpecial] = useState<Traceability | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+  const [project, setProject] = useState<Project | null>(null); const [records, setRecords] = useState<Row[]>([]); const [special, setSpecial] = useState<Traceability | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); type NoticeState = { message: string; type: 'success' | 'error' } | null;
+  const [notice, setNotice] = useState<NoticeState>(null);
+  const noticeTimerRef = useRef<NodeJS.Timeout | number | null>(null);
   const active = tabs.find(t => t.key === tab) || tabs[0];
   const load = async () => { setLoading(true); setError(''); try { setProject(await get<Project>(`/projects/${projectId}`)); const endpoint = tab === 'overview' ? endpoints.activity(projectId) : tab === 'requirements' ? endpoints.requirements(projectId) : tab === 'backlog' ? endpoints.backlog(projectId) : tab === 'sprints' ? endpoints.sprints(projectId) : tab === 'tasks' ? endpoints.stories(projectId) : tab === 'bugs' ? endpoints.bugs(projectId) : tab === 'deliverables' ? endpoints.deliverables(projectId) : tab === 'traceability' ? endpoints.traceability(projectId) : tab === 'team' ? endpoints.members(projectId) : tab === 'github' ? endpoints.github(projectId) : `/projects/${projectId}/board`; const data = await get<unknown>(endpoint); if (tab === 'tasks') { const stories = asList<Row>(data); const hydrated = await Promise.all(stories.map(async story => ({ ...story, tasks: await get<unknown>(endpoints.storyTasks(String(story.id))).then(asList<Task>) }))); setSpecial(null); setRecords(hydrated); } else if (tab === 'traceability') { setSpecial(data && typeof data === 'object' && !Array.isArray(data) ? data as Traceability : { matrix: asList<Row>(data) }); setRecords([]); } else { setSpecial(null); setRecords(extractRows(data, tab)); } } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load project data'); } finally { setLoading(false); } };
   useEffect(() => { load(); }, [projectId, tab]);
   const stats = useMemo(() => ({ requirements: project?._count?.requirements || 0, stories: project?._count?.userStories || 0, tasks: project?._count?.tasks || 0, members: project?.team?.members?.length || project?._count?.members || 0 }), [project]);
-  const notify = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 3500); };
-  return <div className="space-y-6"><div className="flex items-start gap-3 text-sm text-slate-400"><Link to="/projects" className="hover:text-indigo-600">Projects</Link><ChevronRight size={16}/><span className="text-slate-700">{project?.name || 'Project workspace'}</span></div><section className="surface overflow-hidden"><div className="bg-[#17213a] p-6 text-white sm:p-8"><p className="eyebrow text-indigo-300">Project workspace</p><div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h1 className="text-3xl font-semibold tracking-tight">{project?.name || 'Loading project…'}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{project?.description || 'A shared view of planning, delivery, and evidence.'}</p></div><span className="badge bg-emerald-400/15 text-emerald-300">● Active delivery</span></div></div><div className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-white p-2">{tabs.map(t => <button key={t.key} onClick={() => setParams({ tab: t.key })} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${active.key === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}><t.icon size={15}/>{t.label}</button>)}</div></section>{error && <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={load} className="ml-3 font-semibold underline">Retry</button></div>}{notice && <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-700"><Check size={16}/>{notice}</div>}{loading ? <div className="surface p-12 text-center text-sm text-slate-500">Loading {active.label.toLowerCase()}…</div> : tab === 'overview' ? <Overview stats={stats} items={records}/> : tab === 'requirements' ? <Requirements items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'backlog' ? <Backlog items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'sprints' ? <Sprints items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'tasks' ? <Tasks stories={records} refresh={load} notify={notify}/> : tab === 'board' ? <Board projectId={projectId} notify={notify}/> : tab === 'deliverables' ? <Deliverables projectId={projectId} items={records as Deliverable[]} user={user} refresh={load} notify={notify}/> : tab === 'bugs' ? <Bugs items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'team' ? <Team items={records as Member[]} project={project} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'github' ? <GitHub projectId={projectId} initial={records as GithubData[]} refresh={load} notify={notify}/> : <Traceability data={special}/>}</div>;
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current as any);
+    setNotice({ message, type });
+    noticeTimerRef.current = setTimeout(() => setNotice(null), 4000);
+  };
+  return <div className="space-y-6"><div className="flex items-start gap-3 text-sm text-slate-400"><Link to="/projects" className="hover:text-indigo-600">Projects</Link><ChevronRight size={16}/><span className="text-slate-700">{project?.name || 'Project workspace'}</span></div><section className="surface overflow-hidden"><div className="bg-[#17213a] p-6 text-white sm:p-8"><p className="eyebrow text-indigo-300">Project workspace</p><div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><h1 className="text-3xl font-semibold tracking-tight">{project?.name || 'Loading project…'}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{project?.description || 'A shared view of planning, delivery, and evidence.'}</p></div><span className="badge bg-emerald-400/15 text-emerald-300">● Active delivery</span></div></div><div className="flex gap-1 overflow-x-auto border-b border-slate-100 bg-white p-2">{tabs.map(t => <button key={t.key} onClick={() => setParams({ tab: t.key })} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${active.key === t.key ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}><t.icon size={15}/>{t.label}</button>)}</div></section>{error && <div className="rounded-xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">{error}<button onClick={load} className="ml-3 font-semibold underline">Retry</button></div>}{notice && (
+      <div
+        role="alert"
+        className="fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl border bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-top-4"
+        style={{ minWidth: '300px', maxWidth: '440px', borderColor: notice.type === 'error' ? '#fecdd3' : '#a7f3d0' }}
+      >
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+            notice.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+          }`}
+        >
+          {notice.type === 'error' ? <X size={18} strokeWidth={2.5} /> : <Check size={18} strokeWidth={2.5} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={`text-xs font-semibold uppercase tracking-wider ${
+              notice.type === 'error' ? 'text-rose-600' : 'text-emerald-600'
+            }`}
+          >
+            {notice.type === 'error' ? 'Failed' : 'Success'}
+          </p>
+          <p className="text-sm font-medium leading-snug break-words text-slate-800">
+            {notice.message}
+          </p>
+        </div>
+        <button
+          onClick={() => setNotice(null)}
+          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+          aria-label="Dismiss"
+        >
+          <X size={15} />
+        </button>
+      </div>
+    )}{loading ? <div className="surface p-12 text-center text-sm text-slate-500">Loading {active.label.toLowerCase()}…</div> : tab === 'overview' ? <Overview stats={stats} items={records}/> : tab === 'requirements' ? <Requirements items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'backlog' ? <Backlog items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'sprints' ? <Sprints items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'tasks' ? <Tasks stories={records} refresh={load} notify={notify}/> : tab === 'board' ? <Board projectId={projectId} notify={notify}/> : tab === 'deliverables' ? <Deliverables projectId={projectId} items={records as Deliverable[]} user={user} refresh={load} notify={notify}/> : tab === 'bugs' ? <Bugs items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'team' ? <Team items={records as Member[]} project={project} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'github' ? <GitHub projectId={projectId} initial={records as GithubData[]} refresh={load} notify={notify}/> : <Traceability data={special}/>}</div>;
 };
 
 function extractRows(value: unknown, tab: string): Row[] {
@@ -58,10 +97,15 @@ const Bugs = ({ items, projectId, user, refresh, notify }: { items: Row[]; proje
 
 const Deliverables = ({ projectId, items, user, refresh, notify }: { projectId: string; items: Deliverable[]; user: User | null; refresh: () => void; notify: (s: string) => void }) => { const [milestones, setMilestones] = useState<Row[]>([]); const [modal, setModal] = useState(false); const [editing, setEditing] = useState<Deliverable | null>(null); const [form, setForm] = useState<Row>({ title: '', description: '', type: 'OTHER', fileUrl: '', dueDate: '', milestoneId: '' }); const [error, setError] = useState(''); useEffect(() => { get<unknown>(endpoints.milestones(projectId)).then(data => setMilestones(asList<Row>(data))).catch(() => setMilestones([])); }, [projectId]); const open = (item?: Deliverable) => { setError(''); setEditing(item || null); setForm(item || { title: '', description: '', type: 'OTHER', fileUrl: '', dueDate: '', milestoneId: milestones[0]?.id || '' }); setModal(true); }; const save = async (e: React.FormEvent) => { e.preventDefault(); try { if (editing) await patch(endpoints.deliverable(editing.id), form); else await post(`${endpoints.milestoneDeliverables(String(form.milestoneId))}`, form); setModal(false); notify('Deliverable saved'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not save deliverable'); } }; return <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Milestones and evidence</p><h2 className="mt-1 text-xl font-semibold">Deliverables</h2></div>{['FACULTY','TEAM_LEAD','TEAM_MEMBER'].includes(user?.role || '') && <button className="btn-primary" onClick={() => open()}><Plus size={16}/> New deliverable</button>}</div><div className="mt-6 space-y-3">{items.map(item => <div key={item.id} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-col justify-between gap-3 sm:flex-row"><div><div className="flex items-center gap-2"><b>{String(item.title)}</b><Badge value={item.status || 'DRAFT'}/></div><p className="mt-1 text-sm text-slate-500">{String(item.description || 'No description')}</p><p className="mt-2 text-xs text-slate-400">Due {formatDate(String(item.dueDate || ''))} · {String(item.type || 'OTHER')}</p></div><div className="flex gap-2">{['FACULTY','TEAM_LEAD','TEAM_MEMBER'].includes(user?.role || '') && <><button className="btn-secondary px-3 py-1.5" onClick={() => open(item)}>Edit</button><button className="rounded-lg p-2 text-rose-500 hover:bg-rose-50" onClick={async () => { if (window.confirm("Delete this deliverable?")) { try { await del(endpoints.deliverable(item.id)); notify("Deliverable deleted"); refresh(); } catch (err) { setError(err instanceof Error ? err.message : "Could not delete deliverable"); } } }}><Trash2 size={16}/></button></>}{['TEAM_LEAD','TEAM_MEMBER'].includes(user?.role || '') && ['DRAFT','REVISION_REQUESTED'].includes(String(item.status || 'DRAFT')) && <button className="btn-secondary px-3 py-1.5" onClick={async () => { try { await post(`${endpoints.deliverable(item.id)}/submit`); notify('Deliverable submitted'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Submission failed'); } }}>Submit</button>}{user?.role === 'FACULTY' && item.status === 'SUBMITTED' && <button className="btn-secondary px-3 py-1.5" onClick={async () => { try { await post(`${endpoints.deliverable(item.id)}/review`, { action: 'START_REVIEW', feedback: '' }); notify('Review started'); refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Review start failed'); } }}>Start review</button>}{user?.role === 'FACULTY' && item.status === 'UNDER_REVIEW' && <><button className="btn-primary px-3 py-1.5" onClick={async () => { await post(`${endpoints.deliverable(item.id)}/review`, { action: 'APPROVE', feedback: '' }); notify('Deliverable approved'); refresh(); }}>Approve</button><button className="btn-secondary px-3 py-1.5" onClick={async () => { const feedback = window.prompt('Revision feedback'); if (feedback) { await post(`${endpoints.deliverable(item.id)}/review`, { action: 'REQUEST_REVISION', feedback }); notify('Revision requested'); refresh(); } }}>Request revision</button></>}</div></div></div>)}</div>{error && <ErrorText text={error}/>} {modal && <Modal title={editing ? 'Edit deliverable' : 'New deliverable'} close={() => setModal(false)}><form onSubmit={save} className="space-y-4"><Field label="Title" value={String(form.title || '')} onChange={v => setForm({...form,title:v})} required/><Textarea label="Description" value={String(form.description || '')} onChange={v => setForm({...form,description:v})}/><Field label="File URL" value={String(form.fileUrl || '')} onChange={v => setForm({...form,fileUrl:v})}/><div className="grid grid-cols-2 gap-3"><Field label="Due date" type="date" value={String(form.dueDate || '')} onChange={v => setForm({...form,dueDate:v})}/><Select label="Type" value={String(form.type || 'OTHER')} options={['SRS_DOCUMENT','DESIGN_DOCUMENT','REPORT','PRESENTATION','OTHER']} onChange={v => setForm({...form,type:v})}/></div>{!editing && <Select label="Milestone" value={String(form.milestoneId || '')} options={milestones.map(m => String(m.id))} onChange={v => setForm({...form,milestoneId:v})}/>} {error && <ErrorText text={error}/>}<button className="btn-primary w-full">Save deliverable</button></form></Modal>}</section>; };
 
-const Team = ({ items, project, projectId, user, refresh, notify }: { items: Member[]; project: Project | null; projectId: string; user: User | null; refresh: () => void; notify: (s: string) => void }) => {
+const Team = ({ items, project, projectId, user, refresh, notify }: { items: Member[]; project: Project | null; projectId: string; user: User | null; refresh: () => void; notify: (s: string, type?: 'success' | 'error') => void }) => {
   const canManage = ['TEAM_LEAD', 'FACULTY'].includes(user?.role || '');
   const [invitations, setInvitations] = useState<Row[]>([]);
   const [facultyInvitations, setFacultyInvitations] = useState<Row[]>([]);
+
+  const [inviteModal, setInviteModal] = useState<{ open: boolean; type: 'STUDENT' | 'FACULTY' }>({ open: false, type: 'STUDENT' });
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   const loadInvitations = () => {
     get<unknown>(endpoints.invitations(projectId))
@@ -76,29 +120,45 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
     loadInvitations();
   }, [projectId]);
 
-  const sendRequest = async () => {
-    const email = window.prompt('Enter the student email to send a join request:');
-    if (!email) return;
-    try {
-      await post(endpoints.invitations(projectId), { email: email.trim(), role: 'TEAM_MEMBER' });
-      notify('Invitation request sent to student');
-      refresh();
-      loadInvitations();
-    } catch (err) {
-      notify(err instanceof Error ? err.message : 'Could not send invitation request');
-    }
+  const openStudentInvite = () => {
+    setInviteEmail('');
+    setInviteError('');
+    setInviteModal({ open: true, type: 'STUDENT' });
   };
 
-  const sendFacultyRequest = async () => {
-    const email = window.prompt('Enter the faculty advisor email to send a request:');
-    if (!email) return;
+  const openFacultyInvite = () => {
+    setInviteEmail('');
+    setInviteError('');
+    setInviteModal({ open: true, type: 'FACULTY' });
+  };
+
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = inviteEmail.trim();
+    if (!trimmed) {
+      setInviteError('Email address is required');
+      return;
+    }
+    setInviteBusy(true);
+    setInviteError('');
     try {
-      await post(endpoints.facultyInvitations(projectId), { email: email.trim() });
-      notify('Faculty advisor request sent');
+      if (inviteModal.type === 'STUDENT') {
+        await post(endpoints.invitations(projectId), { email: trimmed, role: 'TEAM_MEMBER' });
+        notify('Invitation request sent to student', 'success');
+      } else {
+        await post(endpoints.facultyInvitations(projectId), { email: trimmed });
+        notify('Faculty advisor request sent', 'success');
+      }
+      setInviteModal({ open: false, type: 'STUDENT' });
+      setInviteEmail('');
       refresh();
       loadInvitations();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Could not send faculty request');
+      const errorMsg = err instanceof Error ? err.message : 'Could not send invitation request';
+      setInviteError(errorMsg);
+      notify(errorMsg, 'error');
+    } finally {
+      setInviteBusy(false);
     }
   };
 
@@ -106,10 +166,10 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
     if (!window.confirm('Cancel this invitation request?')) return;
     try {
       await del(`${endpoints.invitations(projectId)}/${invitationId}`);
-      notify('Invitation cancelled');
+      notify('Invitation cancelled', 'success');
       loadInvitations();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Could not cancel invitation');
+      notify(err instanceof Error ? err.message : 'Could not cancel invitation', 'error');
     }
   };
 
@@ -117,10 +177,10 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
     if (!window.confirm('Cancel this faculty advisor request?')) return;
     try {
       await del(`${endpoints.facultyInvitations(projectId)}/${invitationId}`);
-      notify('Faculty request cancelled');
+      notify('Faculty request cancelled', 'success');
       loadInvitations();
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Could not cancel faculty request');
+      notify(err instanceof Error ? err.message : 'Could not cancel faculty request', 'error');
     }
   };
 
@@ -133,7 +193,7 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
             <h2 className="mt-1 text-xl font-semibold">Faculty advisor</h2>
           </div>
           {canManage && !project?.faculty && (
-            <button className="btn-primary" onClick={sendFacultyRequest}>
+            <button className="btn-primary" onClick={openFacultyInvite}>
               <Plus size={16} /> Request faculty advisor
             </button>
           )}
@@ -198,7 +258,7 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
             <h2 className="mt-1 text-xl font-semibold">Team members</h2>
           </div>
           {canManage && (
-            <button className="btn-primary" onClick={sendRequest}>
+            <button className="btn-primary" onClick={openStudentInvite}>
               <Plus size={16} /> Send request
             </button>
           )}
@@ -224,7 +284,7 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
                       await patch(`${endpoints.members(projectId)}/${item.userId}/role`, {
                         role: e.target.value,
                       });
-                      notify('Role updated');
+                      notify('Role updated', 'success');
                       refresh();
                     }}
                   >
@@ -236,7 +296,7 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
                     onClick={async () => {
                       if (window.confirm('Remove this member?')) {
                         await del(`${endpoints.members(projectId)}/${item.userId}`);
-                        notify('Member removed');
+                        notify('Member removed', 'success');
                         refresh();
                       }
                     }}
@@ -285,6 +345,47 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
           </div>
         )}
       </section>
+
+      {inviteModal.open && (
+        <Modal
+          title={inviteModal.type === 'STUDENT' ? 'Invite Team Member' : 'Request Faculty Advisor'}
+          close={() => { if (!inviteBusy) setInviteModal({ open: false, type: 'STUDENT' }); }}
+        >
+          <form onSubmit={handleSendInvite} className="space-y-4">
+            <p className="text-sm text-slate-500">
+              {inviteModal.type === 'STUDENT'
+                ? 'Enter the student email to send a join request. Once they accept via notifications, they will join the team.'
+                : 'Enter the faculty member email to request them as project advisor. Once they accept via notifications, they will be assigned.'}
+            </p>
+            <label className="block text-sm font-medium text-slate-700">
+              {inviteModal.type === 'STUDENT' ? 'Student email address' : 'Faculty advisor email address'}
+              <input
+                type="email"
+                className="input mt-1.5"
+                placeholder={inviteModal.type === 'STUDENT' ? 'student@example.com' : 'faculty@example.com'}
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+            {inviteError && <ErrorText text={inviteError} />}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setInviteModal({ open: false, type: 'STUDENT' })}
+                disabled={inviteBusy}
+              >
+                Cancel
+              </button>
+              <button className="btn-primary" disabled={inviteBusy || !inviteEmail.trim()}>
+                {inviteBusy ? 'Sending…' : 'Send request'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };
