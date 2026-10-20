@@ -588,4 +588,122 @@ export class NotificationService {
       notifications,
     };
   }
+
+  public static async respondToInvitation(
+    notificationId: string,
+    action: 'ACCEPT' | 'REJECT',
+    user: { id: string; name?: string; email?: string; role: Role }
+  ) {
+    if (action !== 'ACCEPT' && action !== 'REJECT') {
+      throw new AppError('Action must be either ACCEPT or REJECT', 400);
+    }
+
+    const notification = await prisma.notification.findUnique({
+      where: { id: notificationId },
+    });
+
+    if (!notification) {
+      throw new AppError('Notification not found', 404);
+    }
+
+    if (notification.userId !== user.id) {
+      throw new AppError('Access denied: cannot respond to another user\'s notification', 403);
+    }
+
+    if (notification.entityType !== 'TEAM_INVITATION') {
+      throw new AppError('This notification is not a team invitation', 400);
+    }
+
+    if (notification.entityId !== 'PENDING') {
+      throw new AppError('This invitation has already been answered', 400);
+    }
+
+    if (!notification.projectId) {
+      throw new AppError('Project associated with invitation was not found', 404);
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: notification.projectId },
+      include: {
+        team: {
+          include: {
+            members: true,
+            lead: true,
+          },
+        },
+      },
+    });
+
+    if (!project || !project.teamId || !project.team) {
+      throw new AppError('Project or project team no longer exists', 404);
+    }
+
+    const studentName = user.name || user.email || 'A student';
+    const leaderId = project.team.leadId;
+
+    if (action === 'ACCEPT') {
+      const alreadyMember = project.team.members.some((m) => m.userId === user.id);
+      if (!alreadyMember) {
+        await prisma.teamMember.create({
+          data: {
+            teamId: project.teamId,
+            userId: user.id,
+            role: Role.TEAM_MEMBER,
+          },
+        });
+      }
+
+      const updated = await prisma.notification.update({
+        where: { id: notificationId },
+        data: {
+          entityId: 'ACCEPTED',
+          title: 'Project Invitation (Accepted)',
+          message: `${notification.message} - Request accepted`,
+          read: true,
+          readAt: new Date(),
+        },
+      });
+
+      if (leaderId && leaderId !== user.id) {
+        await prisma.notification.create({
+          data: {
+            userId: leaderId,
+            title: 'Team Invitation Accepted',
+            message: `${studentName} accepted the request to join ${project.name}`,
+            type: NotificationType.GENERAL,
+            entityType: 'TEAM_INVITATION_RESPONSE',
+            projectId: project.id,
+          },
+        });
+      }
+
+      return updated;
+    } else {
+      const updated = await prisma.notification.update({
+        where: { id: notificationId },
+        data: {
+          entityId: 'REJECTED',
+          title: 'Project Invitation (Declined)',
+          message: `${notification.message} - Request not accepted`,
+          read: true,
+          readAt: new Date(),
+        },
+      });
+
+      if (leaderId && leaderId !== user.id) {
+        await prisma.notification.create({
+          data: {
+            userId: leaderId,
+            title: 'Team Invitation Rejected',
+            message: `${studentName} rejected the request to join ${project.name}`,
+            type: NotificationType.GENERAL,
+            entityType: 'TEAM_INVITATION_RESPONSE',
+            projectId: project.id,
+          },
+        });
+      }
+
+      return updated;
+    }
+  }
 }

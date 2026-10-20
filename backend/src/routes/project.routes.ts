@@ -36,6 +36,9 @@ router.get('/:id/board', ProjectController.getProjectBoard);
 // Team member routes
 router.get('/:id/members', ProjectController.getTeamMembers);
 router.post('/:id/members', ProjectController.addTeamMember);
+router.post('/:id/invitations', ProjectController.inviteTeamMember);
+router.get('/:id/invitations', ProjectController.getProjectInvitations);
+router.delete('/:id/invitations/:invitationId', ProjectController.cancelProjectInvitation);
 router.delete('/:id/members/:userId', ProjectController.removeTeamMember);
 router.patch('/:id/members/:userId/role', ProjectController.updateMemberRole);
 router.put('/:id/members/:userId/role', ProjectController.updateMemberRole);

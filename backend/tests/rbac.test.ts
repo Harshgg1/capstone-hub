@@ -70,6 +70,12 @@ vi.mock('../src/lib/prisma', () => ({
     },
     notification: {
       count: vi.fn(),
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -381,6 +387,62 @@ describe('Role-Based Access Control (RBAC) Verification', () => {
 
         expect(res.status).toBe(201);
         expect(res.body.success).toBe(true);
+      });
+
+      it('allows TEAM_LEAD to add a team member using email', async () => {
+        (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+        (prisma.user.findUnique as any).mockResolvedValue(candidateUser);
+        (prisma.teamMember.findUnique as any).mockResolvedValue(null);
+        (prisma.teamMember.create as any).mockResolvedValue({
+          teamId: 'team-uuid-1',
+          userId: candidateUser.id,
+          role: Role.TEAM_MEMBER,
+          user: candidateUser,
+        });
+
+        const res = await request(app)
+          .post('/api/projects/proj-uuid-1/members')
+          .set('Authorization', `Bearer ${teamLeadToken}`)
+          .send({ email: candidateUser.email, role: Role.TEAM_MEMBER });
+
+        expect(res.status).toBe(201);
+        expect(res.body.success).toBe(true);
+        expect(prisma.user.findUnique).toHaveBeenCalledWith({
+          where: { email: candidateUser.email.toLowerCase() },
+        });
+      });
+
+      it('allows TEAM_LEAD to send member invitation request to student', async () => {
+        (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+        (prisma.user.findUnique as any).mockResolvedValue(candidateUser);
+        (prisma.notification.findFirst as any).mockResolvedValue(null);
+        (prisma.notification.create as any).mockResolvedValue({
+          id: 'inv-1',
+          userId: candidateUser.id,
+          title: 'Project Invitation',
+          message: 'lead@example.com invited you to join Alpha Team Project',
+          entityType: 'TEAM_INVITATION',
+          entityId: 'PENDING',
+          projectId: 'proj-uuid-1',
+        });
+
+        const res = await request(app)
+          .post('/api/projects/proj-uuid-1/invitations')
+          .set('Authorization', `Bearer ${teamLeadToken}`)
+          .send({ email: candidateUser.email });
+
+        expect(res.status).toBe(201);
+        expect(res.body.success).toBe(true);
+        expect(prisma.notification.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              userId: candidateUser.id,
+              entityType: 'TEAM_INVITATION',
+              entityId: 'PENDING',
+              projectId: 'proj-uuid-1',
+            }),
+          })
+        );
       });
 
       it('denies TEAM_MEMBER from adding team members with 403', async () => {

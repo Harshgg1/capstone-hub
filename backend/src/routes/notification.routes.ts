@@ -30,4 +30,15 @@ router.put('/:id/unread', NotificationController.markAsUnread);
 router.get('/:id', NotificationController.getNotificationById);
 router.delete('/:id', NotificationController.deleteNotification);
 
+// Invitation response endpoints
+router.post('/:id/respond', NotificationController.respondToInvitation);
+router.post('/:id/accept', (req, res, next) => {
+  req.body = { ...(req.body || {}), action: 'ACCEPT' };
+  NotificationController.respondToInvitation(req, res, next);
+});
+router.post('/:id/reject', (req, res, next) => {
+  req.body = { ...(req.body || {}), action: 'REJECT' };
+  NotificationController.respondToInvitation(req, res, next);
+});
+
 export default router;

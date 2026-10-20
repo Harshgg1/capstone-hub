@@ -97,7 +97,7 @@ export class ProjectController {
 
   /**
    * Add a team member to a project's team.
-   * Expects JSON body: { userId: string, role?: Role }
+   * Expects JSON body: { userId?: string, email?: string, role?: Role }
    */
   public static async addTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -106,8 +106,8 @@ export class ProjectController {
         return;
       }
       const { id: projectId } = req.params;
-      const { userId, role } = req.body;
-      const member = await ProjectService.addTeamMember(projectId, { userId, role }, req.user);
+      const { userId, email, role } = req.body;
+      const member = await ProjectService.addTeamMember(projectId, { userId, email, role }, req.user);
       res.status(201).json({ success: true, data: member });
     } catch (error) {
       if (error instanceof AppError) {
@@ -205,6 +205,61 @@ export class ProjectController {
       const { id } = req.params;
       const board = await ProjectService.getProjectBoard(id, req.user);
       res.status(200).json({ success: true, data: board });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  public static async inviteTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId } = req.params;
+      const { userId, email, role } = req.body;
+      const invitation = await ProjectService.inviteTeamMember(projectId, { userId, email, role }, req.user);
+      res.status(201).json({ success: true, data: invitation });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  public static async getProjectInvitations(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId } = req.params;
+      const invitations = await ProjectService.getProjectInvitations(projectId, req.user);
+      res.status(200).json({ success: true, data: invitations });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  public static async cancelProjectInvitation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId, invitationId } = req.params;
+      const result = await ProjectService.cancelProjectInvitation(projectId, invitationId, req.user);
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       if (error instanceof AppError) {
         res.status(error.statusCode).json({ success: false, error: error.message });
