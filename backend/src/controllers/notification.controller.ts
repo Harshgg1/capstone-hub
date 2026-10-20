@@ -252,4 +252,23 @@ export class NotificationController {
       next(error);
     }
   }
+
+  public static async respondToInvitation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id } = req.params;
+      const { action } = req.body;
+      const result = await NotificationService.respondToInvitation(id, action, req.user);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
 }

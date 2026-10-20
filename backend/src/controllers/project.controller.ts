@@ -213,4 +213,59 @@ export class ProjectController {
       next(error);
     }
   }
+
+  public static async inviteTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId } = req.params;
+      const { userId, email, role } = req.body;
+      const invitation = await ProjectService.inviteTeamMember(projectId, { userId, email, role }, req.user);
+      res.status(201).json({ success: true, data: invitation });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  public static async getProjectInvitations(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId } = req.params;
+      const invitations = await ProjectService.getProjectInvitations(projectId, req.user);
+      res.status(200).json({ success: true, data: invitations });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
+
+  public static async cancelProjectInvitation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Authentication required' });
+        return;
+      }
+      const { id: projectId, invitationId } = req.params;
+      const result = await ProjectService.cancelProjectInvitation(projectId, invitationId, req.user);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({ success: false, error: error.message });
+        return;
+      }
+      next(error);
+    }
+  }
 }

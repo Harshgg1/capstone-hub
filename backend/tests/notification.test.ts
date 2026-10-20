@@ -12,6 +12,12 @@ vi.mock('../src/lib/prisma', () => ({
     project: {
       findUnique: vi.fn(),
     },
+    teamMember: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      delete: vi.fn(),
+    },
     notification: {
       create: vi.fn(),
       createMany: vi.fn(),
@@ -19,6 +25,7 @@ vi.mock('../src/lib/prisma', () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
       delete: vi.fn(),
+      update: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -534,6 +541,98 @@ describe('Notification API & Service', () => {
       expect(response.body.data.projectId).toBe('proj-uuid-1');
       expect(response.body.data.totalCount).toBe(2);
       expect(response.body.data.notifications.length).toBe(1);
+    });
+  });
+
+  describe('POST /api/notifications/:id/respond - Respond to Invitation', () => {
+    const mockInvitationNotif = {
+      id: 'inv-notif-1',
+      title: 'Project Invitation',
+      message: 'lead@example.com invited you to join Capstone Platform Project',
+      type: NotificationType.GENERAL,
+      entityType: 'TEAM_INVITATION',
+      entityId: 'PENDING',
+      projectId: 'proj-uuid-1',
+      userId: 'outsider-uuid-1',
+      read: false,
+    };
+
+    it('should allow student to accept invitation, joining the team and notifying leader', async () => {
+      (prisma.notification.findUnique as any).mockResolvedValue(mockInvitationNotif);
+      (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+      (prisma.teamMember.create as any).mockResolvedValue({
+        teamId: 'team-uuid-1',
+        userId: 'outsider-uuid-1',
+        role: Role.TEAM_MEMBER,
+      });
+      (prisma.notification.update as any).mockResolvedValue({
+        ...mockInvitationNotif,
+        entityId: 'ACCEPTED',
+        message: `${mockInvitationNotif.message} - Request accepted`,
+        read: true,
+      });
+      (prisma.notification.create as any).mockResolvedValue({
+        id: 'resp-notif-1',
+      });
+
+      const token = generateToken(outsiderUser);
+      const res = await request(app)
+        .post('/api/notifications/inv-notif-1/respond')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'ACCEPT' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(prisma.teamMember.create).toHaveBeenCalledWith({
+        data: {
+          teamId: 'team-uuid-1',
+          userId: 'outsider-uuid-1',
+          role: Role.TEAM_MEMBER,
+        },
+      });
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'lead-uuid-1',
+            entityType: 'TEAM_INVITATION_RESPONSE',
+            title: 'Team Invitation Accepted',
+          }),
+        })
+      );
+    });
+
+    it('should allow student to reject invitation, not joining the team and notifying leader', async () => {
+      (prisma.teamMember.create as any).mockClear();
+      (prisma.notification.findUnique as any).mockResolvedValue(mockInvitationNotif);
+      (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+      (prisma.notification.update as any).mockResolvedValue({
+        ...mockInvitationNotif,
+        entityId: 'REJECTED',
+        message: `${mockInvitationNotif.message} - Request not accepted`,
+        read: true,
+      });
+      (prisma.notification.create as any).mockResolvedValue({
+        id: 'resp-notif-2',
+      });
+
+      const token = generateToken(outsiderUser);
+      const res = await request(app)
+        .post('/api/notifications/inv-notif-1/respond')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ action: 'REJECT' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(prisma.teamMember.create).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'lead-uuid-1',
+            entityType: 'TEAM_INVITATION_RESPONSE',
+            title: 'Team Invitation Rejected',
+          }),
+        })
+      );
     });
   });
 });
