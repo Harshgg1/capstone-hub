@@ -222,7 +222,7 @@ export class ProjectService {
 
   public static async addTeamMember(
     projectId: string,
-    data: { userId?: string; role?: Role },
+    data: { userId?: string; email?: string; role?: Role },
     user: { id: string; role: Role }
   ) {
     const project = await prisma.project.findUnique({
@@ -255,14 +255,16 @@ export class ProjectService {
       throw new AppError('Access denied: insufficient permissions', 403);
     }
 
-    const { userId, role } = data;
+    const { userId, email, role } = data;
 
-    if (!userId || typeof userId !== 'string' || !userId.trim()) {
-      throw new AppError('User ID is required', 400);
+    const hasUserId = typeof userId === 'string' && userId.trim().length > 0;
+    const hasEmail = typeof email === 'string' && email.trim().length > 0;
+    if (!hasUserId && !hasEmail) {
+      throw new AppError('Email or User ID is required', 400);
     }
 
     const targetUser = await prisma.user.findUnique({
-      where: { id: userId.trim() },
+      where: hasEmail ? { email: email!.trim().toLowerCase() } : { id: userId!.trim() },
     });
 
     if (!targetUser) {

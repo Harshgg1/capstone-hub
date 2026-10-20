@@ -383,6 +383,29 @@ describe('Role-Based Access Control (RBAC) Verification', () => {
         expect(res.body.success).toBe(true);
       });
 
+      it('allows TEAM_LEAD to add a team member using email', async () => {
+        (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
+        (prisma.user.findUnique as any).mockResolvedValue(candidateUser);
+        (prisma.teamMember.findUnique as any).mockResolvedValue(null);
+        (prisma.teamMember.create as any).mockResolvedValue({
+          teamId: 'team-uuid-1',
+          userId: candidateUser.id,
+          role: Role.TEAM_MEMBER,
+          user: candidateUser,
+        });
+
+        const res = await request(app)
+          .post('/api/projects/proj-uuid-1/members')
+          .set('Authorization', `Bearer ${teamLeadToken}`)
+          .send({ email: candidateUser.email, role: Role.TEAM_MEMBER });
+
+        expect(res.status).toBe(201);
+        expect(res.body.success).toBe(true);
+        expect(prisma.user.findUnique).toHaveBeenCalledWith({
+          where: { email: candidateUser.email.toLowerCase() },
+        });
+      });
+
       it('denies TEAM_MEMBER from adding team members with 403', async () => {
         (prisma.project.findUnique as any).mockResolvedValue(mockProjectWithTeam);
 

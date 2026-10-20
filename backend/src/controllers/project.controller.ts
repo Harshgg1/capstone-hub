@@ -97,7 +97,7 @@ export class ProjectController {
 
   /**
    * Add a team member to a project's team.
-   * Expects JSON body: { userId: string, role?: Role }
+   * Expects JSON body: { userId?: string, email?: string, role?: Role }
    */
   public static async addTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -106,8 +106,8 @@ export class ProjectController {
         return;
       }
       const { id: projectId } = req.params;
-      const { userId, role } = req.body;
-      const member = await ProjectService.addTeamMember(projectId, { userId, role }, req.user);
+      const { userId, email, role } = req.body;
+      const member = await ProjectService.addTeamMember(projectId, { userId, email, role }, req.user);
       res.status(201).json({ success: true, data: member });
     } catch (error) {
       if (error instanceof AppError) {
