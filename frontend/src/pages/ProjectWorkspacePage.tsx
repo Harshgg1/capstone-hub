@@ -21,7 +21,24 @@ export const ProjectWorkspacePage: React.FC = () => {
   const [notice, setNotice] = useState<NoticeState>(null);
   const noticeTimerRef = useRef<NodeJS.Timeout | number | null>(null);
   const active = tabs.find(t => t.key === tab) || tabs[0];
-  const load = async () => { setLoading(true); setError(''); try { setProject(await get<Project>(`/projects/${projectId}`)); const endpoint = tab === 'overview' ? endpoints.activity(projectId) : tab === 'requirements' ? endpoints.requirements(projectId) : tab === 'backlog' ? endpoints.backlog(projectId) : tab === 'sprints' ? endpoints.sprints(projectId) : tab === 'tasks' ? endpoints.stories(projectId) : tab === 'bugs' ? endpoints.bugs(projectId) : tab === 'deliverables' ? endpoints.deliverables(projectId) : tab === 'traceability' ? endpoints.traceability(projectId) : tab === 'team' ? endpoints.members(projectId) : tab === 'github' ? endpoints.github(projectId) : `/projects/${projectId}/board`; const data = await get<unknown>(endpoint); if (tab === 'tasks') { const stories = asList<Row>(data); const hydrated = await Promise.all(stories.map(async story => ({ ...story, tasks: await get<unknown>(endpoints.storyTasks(String(story.id))).then(asList<Task>) }))); setSpecial(null); setRecords(hydrated); } else if (tab === 'traceability') { setSpecial(data && typeof data === 'object' && !Array.isArray(data) ? data as Traceability : { matrix: asList<Row>(data) }); setRecords([]); } else { setSpecial(null); setRecords(extractRows(data, tab)); } } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load project data'); } finally { setLoading(false); } };
+  const load = async () => { setLoading(true); setError(''); try { setProject(await get<Project>(`/projects/${projectId}`)); const endpoint = tab === 'overview' ? endpoints.activity(projectId) : tab === 'requirements' ? endpoints.requirements(projectId) : tab === 'backlog' ? endpoints.backlog(projectId) : tab === 'sprints' ? endpoints.sprints(projectId) : tab === 'tasks' ? endpoints.stories(projectId) : tab === 'bugs' ? endpoints.bugs(projectId) : tab === 'deliverables' ? endpoints.deliverables(projectId) : tab === 'traceability' ? endpoints.traceability(projectId) : tab === 'team' ? endpoints.members(projectId) : tab === 'github' ? endpoints.github(projectId) : `/projects/${projectId}/board`; const data = await get<unknown>(endpoint); if (tab === 'tasks') { const stories = asList<Row>(data); const hydrated = await Promise.all(stories.map(async story => ({ ...story, tasks: await get<unknown>(endpoints.storyTasks(String(story.id))).then(asList<Task>) }))); setSpecial(null); setRecords(hydrated); } else if (tab === 'traceability') {
+      const [treeData, matrixData] = await Promise.all([
+        get<Row>(endpoints.traceability(projectId)).catch(() => ({})),
+        get<Row>(endpoints.traceabilityMatrix(projectId)).catch(() => ({})),
+      ]);
+      const matrixRows = asList<Row>((matrixData as Row)?.rows || (matrixData as Row)?.matrix || matrixData);
+      const combined: Traceability = {
+        ...(treeData as Traceability),
+        matrix: matrixRows,
+        tree: asList<Row>((treeData as Row)?.tree),
+        coverage: ((treeData as Row)?.coverage as Row) || null,
+        unlinkedStories: asList<Row>((treeData as Row)?.unlinkedStories),
+        unlinkedBugs: asList<Row>((treeData as Row)?.unlinkedBugs),
+        sprints: asList<Row>((treeData as Row)?.sprints),
+      };
+      setSpecial(combined);
+      setRecords([]);
+    } else { setSpecial(null); setRecords(extractRows(data, tab)); } } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load project data'); } finally { setLoading(false); } };
   useEffect(() => { load(); }, [projectId, tab]);
   const stats = useMemo(() => ({ requirements: project?._count?.requirements || 0, stories: project?._count?.userStories || 0, tasks: project?._count?.tasks || 0, members: project?.team?.members?.length || project?._count?.members || 0 }), [project]);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -62,7 +79,7 @@ export const ProjectWorkspacePage: React.FC = () => {
           <X size={15} />
         </button>
       </div>
-    )}{loading ? <div className="surface p-12 text-center text-sm text-slate-500">Loading {active.label.toLowerCase()}…</div> : tab === 'overview' ? <Overview stats={stats} items={records}/> : tab === 'requirements' ? <Requirements items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'backlog' ? <Backlog items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'sprints' ? <Sprints items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'tasks' ? <Tasks stories={records} refresh={load} notify={notify}/> : tab === 'board' ? <Board projectId={projectId} notify={notify}/> : tab === 'deliverables' ? <Deliverables projectId={projectId} items={records as Deliverable[]} user={user} refresh={load} notify={notify}/> : tab === 'bugs' ? <Bugs items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'team' ? <Team items={records as Member[]} project={project} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'github' ? <GitHub projectId={projectId} initial={records as GithubData[]} refresh={load} notify={notify}/> : <Traceability data={special}/>}</div>;
+    )}{loading ? <div className="surface p-12 text-center text-sm text-slate-500">Loading {active.label.toLowerCase()}…</div> : tab === 'overview' ? <Overview stats={stats} items={records}/> : tab === 'requirements' ? <Requirements items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'backlog' ? <Backlog items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'sprints' ? <Sprints items={records} projectId={projectId} refresh={load} notify={notify}/> : tab === 'tasks' ? <Tasks stories={records} refresh={load} notify={notify}/> : tab === 'board' ? <Board projectId={projectId} notify={notify}/> : tab === 'deliverables' ? <Deliverables projectId={projectId} items={records as Deliverable[]} user={user} refresh={load} notify={notify}/> : tab === 'bugs' ? <Bugs items={records} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'team' ? <Team items={records as Member[]} project={project} projectId={projectId} user={user} refresh={load} notify={notify}/> : tab === 'github' ? <GitHub projectId={projectId} initial={records as GithubData[]} refresh={load} notify={notify}/> : <Traceability data={special} projectId={projectId} refresh={load} notify={notify}/>}</div>;
 };
 
 function extractRows(value: unknown, tab: string): Row[] {
@@ -392,17 +409,732 @@ const Team = ({ items, project, projectId, user, refresh, notify }: { items: Mem
 
 const GitHub = ({ projectId, initial, refresh, notify }: { projectId: string; initial: GithubData[]; refresh: () => Promise<void>; notify: (s: string) => void }) => { const [section, setSection] = useState('connection'); const [data, setData] = useState<GithubData[]>(initial); const [error, setError] = useState(''); const [form, setForm] = useState({ repoOwner: '', repoName: '' }); const load = async (name: string) => { setSection(name); setError(''); try { const result = await get<unknown>(name === 'connection' ? endpoints.github(projectId) : `${endpoints.github(projectId)}/${name}`); setData(githubRows(result, name)); } catch (err) { setData([]); setError(err instanceof Error ? err.message : 'GitHub request failed'); } }; const connect = async (e: React.FormEvent) => { e.preventDefault(); try { await post(`${endpoints.github(projectId)}/connect`, form); notify('Repository connected'); await refresh(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not connect repository'); } }; const disconnect = async () => { if (window.confirm('Disconnect this repository?')) { try { await del(`${endpoints.github(projectId)}/disconnect`); notify('Repository disconnected'); setData([]); } catch (err) { setError(err instanceof Error ? err.message : 'Could not disconnect repository'); } } }; return <section className="surface p-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div><p className="eyebrow">Repository intelligence</p><h2 className="mt-1 text-xl font-semibold">GitHub integration</h2></div><div className="flex flex-wrap gap-2">{['connection','commits','branches','pulls','contributors'].map(key => <button key={key} onClick={() => load(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize ${section === key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{key}</button>)}</div></div>{error && <ErrorText text={error}/>}<div className="mt-6">{section === 'connection' && <>{data[0]?.repoName ? <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-6"><div><p className="font-semibold">{data[0].repoOwner}/{data[0].repoName}</p><p className="mt-1 text-sm text-slate-500">Default branch: {data[0].defaultBranch || 'main'}</p></div><button className="btn-secondary" onClick={disconnect}>Disconnect</button></div> : <form onSubmit={connect} className="grid gap-3 rounded-2xl bg-slate-50 p-6 sm:grid-cols-3"><Field label="Owner (optional when pasting a URL)" value={form.repoOwner} onChange={v => setForm({...form,repoOwner:v})}/><Field label="Repository name or GitHub URL" value={form.repoName} onChange={v => setForm({...form,repoName:v})} required/><button className="btn-primary self-end">Connect repository</button></form>}</>}{section !== 'connection' && <div className="grid gap-3 md:grid-cols-2">{data.length ? data.map((item, i) => { const author = item.author as Row | undefined; const actor = item.user as Row | undefined; return <div key={String(item.id || i)} className="rounded-xl border border-slate-100 p-4"><p className="font-semibold">{String(item.title || item.name || item.message || item.username || 'GitHub activity')}</p><p className="mt-2 text-sm text-slate-500">{String(author?.username || author?.name || actor?.username || item.contributions || item.state || item.sha || 'Repository data')}</p><p className="mt-1 text-xs text-slate-400">{formatDate(String(item.createdAt || item.date || ''))}</p></div>; }) : <p className="py-10 text-center text-sm text-slate-500">No {section} data returned.</p>}</div>}</div></section>; };
 
-const Traceability = ({ data }: { data: Traceability | null }) => <section className="surface p-6"><p className="eyebrow">End-to-end evidence</p><h2 className="mt-1 text-xl font-semibold">Traceability matrix</h2>{data?.coverage && <div className="mt-4 grid gap-3 sm:grid-cols-3"><Info label="Requirement coverage" value={`${String(data.coverage.requirementCoverageRate || 0)}%`}/><Info label="Tasks complete" value={`${String(data.coverage.completedTasks || 0)} / ${String(data.coverage.totalTasks || 0)}`}/><Info label="Linked bugs" value={`${String(data.coverage.linkedBugs || 0)} / ${String(data.coverage.totalBugs || 0)}`}/></div>}<div className="mt-6 space-y-3">{data?.matrix?.map((row, i) => <div key={String(row.requirementId || row.userStoryId || row.taskId || i)} className="grid gap-2 rounded-xl border border-slate-100 p-4 text-sm md:grid-cols-5"><span><b>Req:</b> {String(row.requirementTitle || 'Not linked')}</span><span><b>Story:</b> {String(row.userStoryTitle || 'Not linked')}</span><span><b>Task:</b> {String(row.taskTitle || 'Not linked')}</span><span><b>Sprint:</b> {String(row.sprintName || 'Not linked')}</span><span className={row.bugTitle ? 'text-rose-600' : ''}><b>Bug:</b> {String(row.bugTitle || 'None')}</span></div>)}{data?.tree?.map((req, i) => <div key={String(req.id || i)} className="rounded-xl border border-slate-100 p-4"><div className="flex items-center gap-2"><b>{String(req.title)}</b><Badge value={req.status}/></div>{asList<Row>(req.stories).map(story => <div key={String(story.id)} className="ml-4 mt-3 border-l-2 border-indigo-100 pl-4"><p className="font-medium">→ {String(story.title)}</p>{asList<Row>(story.tasks).map(task => <p key={String(task.id)} className="ml-4 mt-2 text-sm text-slate-500">→ {String(task.title)} · {String((task.sprint as Row)?.name || 'No sprint')}</p>)}</div>)}</div>)}{!data?.matrix?.length && !data?.tree?.length && <p className="py-12 text-center text-sm text-slate-500">No traceability relationships returned.</p>}</div></section>;
+const Traceability = ({
+  data,
+  projectId: _projectId,
+  refresh,
+  notify,
+}: {
+  data: Traceability | null;
+  projectId?: string;
+  refresh: () => void;
+  notify: (s: string, type?: 'success' | 'error') => void;
+}) => {
+  const [view, setView] = useState<'matrix' | 'tree' | 'gaps'>('matrix');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [linkingModal, setLinkingModal] = useState<{ open: boolean; storyId: string; storyTitle: string }>({
+    open: false,
+    storyId: '',
+    storyTitle: '',
+  });
+  const [selectedReqId, setSelectedReqId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const coverage = data?.coverage as Record<string, number> | undefined;
+  const matrixRows = asList<Row>(data?.matrix);
+  const treeNodes = asList<Row>(data?.tree);
+  const unlinkedStories = asList<Row>(data?.unlinkedStories);
+  const unlinkedBugs = asList<Row>(data?.unlinkedBugs);
+
+  const uncoveredReqs = treeNodes.filter((req) => !asList<Row>(req.stories).length);
+
+  const filteredRows = matrixRows.filter((row) => {
+    const q = search.toLowerCase();
+    const matchSearch =
+      !q ||
+      String(row.requirementTitle || '').toLowerCase().includes(q) ||
+      String(row.userStoryTitle || '').toLowerCase().includes(q) ||
+      String(row.taskTitle || '').toLowerCase().includes(q) ||
+      String(row.bugTitle || '').toLowerCase().includes(q) ||
+      String(row.sprintName || '').toLowerCase().includes(q);
+
+    if (!matchSearch) return false;
+    if (statusFilter === 'COMPLETE') return row.taskStatus === 'DONE';
+    if (statusFilter === 'IN_PROGRESS') return row.taskStatus === 'IN_PROGRESS' || row.userStoryStatus === 'IN_PROGRESS';
+    if (statusFilter === 'WITH_BUGS') return Boolean(row.bugTitle);
+    if (statusFilter === 'UNLINKED') return !row.requirementId || !row.userStoryId || !row.taskId;
+    return true;
+  });
+
+  const handleLinkStory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReqId || !linkingModal.storyId) return;
+    setBusy(true);
+    try {
+      await post(`/requirements/${selectedReqId}/stories`, { userStoryId: linkingModal.storyId });
+      notify('User story linked to requirement', 'success');
+      setLinkingModal({ open: false, storyId: '', storyTitle: '' });
+      setSelectedReqId('');
+      refresh();
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Failed to link user story', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const hasAnyData = matrixRows.length > 0 || treeNodes.length > 0 || unlinkedStories.length > 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Top Coverage Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="surface p-5 border-l-4 border-indigo-600">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Requirement Coverage</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-slate-900">
+              {coverage?.requirementCoverageRate ?? 0}%
+            </span>
+            <span className="text-xs text-slate-500">
+              ({coverage?.coveredRequirements ?? 0}/{coverage?.totalRequirements ?? 0} covered)
+            </span>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full bg-indigo-600 transition-all duration-500"
+              style={{ width: `${Math.min(100, coverage?.requirementCoverageRate ?? 0)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="surface p-5 border-l-4 border-emerald-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tasks Completed</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-slate-900">
+              {coverage?.completedTasks ?? 0}
+            </span>
+            <span className="text-xs text-slate-500">
+              / {coverage?.totalTasks ?? 0} total tasks
+            </span>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-500"
+              style={{
+                width: `${
+                  (coverage?.totalTasks ?? 0) > 0
+                    ? Math.round(((coverage?.completedTasks ?? 0) / (coverage?.totalTasks ?? 1)) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="surface p-5 border-l-4 border-blue-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Stories in Delivery</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-slate-900">
+              {coverage?.storiesWithTasks ?? 0}
+            </span>
+            <span className="text-xs text-slate-500">
+              / {coverage?.totalStories ?? 0} ({coverage?.storiesInSprints ?? 0} in sprints)
+            </span>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full bg-blue-500 transition-all duration-500"
+              style={{
+                width: `${
+                  (coverage?.totalStories ?? 0) > 0
+                    ? Math.round(((coverage?.storiesWithTasks ?? 0) / (coverage?.totalStories ?? 1)) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="surface p-5 border-l-4 border-rose-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Defects & Traceability</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-slate-900">
+              {coverage?.linkedBugs ?? 0}
+            </span>
+            <span className="text-xs text-slate-500">
+              / {coverage?.totalBugs ?? 0} linked ({coverage?.resolvedBugs ?? 0} resolved)
+            </span>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full bg-rose-500 transition-all duration-500"
+              style={{
+                width: `${
+                  (coverage?.totalBugs ?? 0) > 0
+                    ? Math.round(((coverage?.linkedBugs ?? 0) / (coverage?.totalBugs ?? 1)) * 100)
+                    : 100
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Main Traceability Workspace Container */}
+      <section className="surface p-6">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center border-b border-slate-100 pb-5">
+          <div>
+            <p className="eyebrow">End-to-End Evidence</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+              Traceability Matrix & Hierarchy
+            </h2>
+            <p className="mt-1 text-xs text-slate-400">
+              Verify requirement coverage, sprint execution alignment, and defect resolution.
+            </p>
+          </div>
+
+          {/* View switcher buttons */}
+          <div className="flex rounded-xl bg-slate-100 p-1">
+            <button
+              onClick={() => setView('matrix')}
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                view === 'matrix' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Matrix Table ({matrixRows.length})
+            </button>
+            <button
+              onClick={() => setView('tree')}
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                view === 'tree' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Hierarchy Tree ({treeNodes.length})
+            </button>
+            <button
+              onClick={() => setView('gaps')}
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                view === 'gaps' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Gap Analysis ({uncoveredReqs.length + unlinkedStories.length + unlinkedBugs.length})
+            </button>
+          </div>
+        </div>
+
+        {/* View 1: MATRIX TABLE */}
+        {view === 'matrix' && (
+          <div className="mt-6 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-1 items-center gap-2 max-w-md rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <input
+                  type="text"
+                  placeholder="Search requirement, story, task, bug, sprint…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-transparent outline-none text-slate-800 placeholder-slate-400 text-xs sm:text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-400">Filter:</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+                >
+                  <option value="ALL">All Relationships</option>
+                  <option value="COMPLETE">Completed Tasks</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="WITH_BUGS">Linked Defects</option>
+                  <option value="UNLINKED">Gaps & Unlinked</option>
+                </select>
+              </div>
+            </div>
+
+            {filteredRows.length > 0 ? (
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-200 bg-slate-50 font-semibold text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3">Requirement</th>
+                      <th className="px-4 py-3">User Story</th>
+                      <th className="px-4 py-3">Task</th>
+                      <th className="px-4 py-3">Sprint</th>
+                      <th className="px-4 py-3">Bug / Defect</th>
+                      <th className="px-4 py-3">PR</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {filteredRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-indigo-50/20 transition">
+                        <td className="px-4 py-3 max-w-[200px]">
+                          {row.requirementTitle ? (
+                            <div>
+                              <p className="font-semibold text-slate-900 truncate" title={String(row.requirementTitle)}>
+                                {String(row.requirementTitle)}
+                              </p>
+                              {Boolean(row.requirementStatus) && (
+                                <span className="mt-1 inline-block rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                                  {String(row.requirementStatus)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">No requirement</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 max-w-[200px]">
+                          {row.userStoryTitle ? (
+                            <div>
+                              <p className="font-semibold text-slate-900 truncate" title={String(row.userStoryTitle)}>
+                                {String(row.userStoryTitle)}
+                              </p>
+                              {Boolean(row.userStoryStatus) && (
+                                <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                                  {String(row.userStoryStatus)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">No story</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 max-w-[200px]">
+                          {row.taskTitle ? (
+                            <div>
+                              <p className="font-medium text-slate-800 truncate" title={String(row.taskTitle)}>
+                                {String(row.taskTitle)}
+                              </p>
+                              {Boolean(row.taskStatus) && (
+                                <span
+                                  className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    row.taskStatus === 'DONE'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : row.taskStatus === 'IN_PROGRESS'
+                                      ? 'bg-amber-50 text-amber-700'
+                                      : 'bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  {String(row.taskStatus)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">No task</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {row.sprintName ? (
+                            <span className="font-medium text-slate-700">{String(row.sprintName)}</span>
+                          ) : (
+                            <span className="text-slate-400 italic">No sprint</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 max-w-[180px]">
+                          {row.bugTitle ? (
+                            <div>
+                              <span className="font-semibold text-rose-600 truncate block" title={String(row.bugTitle)}>
+                                🐛 {String(row.bugTitle)}
+                              </span>
+                              {Boolean(row.bugStatus) && (
+                                <span className="mt-1 inline-block rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                                  {String(row.bugStatus)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">None</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {row.pullRequestUrl ? (
+                            <a
+                              href={String(row.pullRequestUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-semibold text-indigo-600 hover:underline"
+                            >
+                              PR #{String(row.prNumber || '')}
+                            </a>
+                          ) : row.prNumber ? (
+                            <span className="text-slate-600 font-medium">#{String(row.prNumber)}</span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="surface p-12 text-center text-sm text-slate-500">
+                {hasAnyData ? 'No relationships match your search/filter.' : 'No traceability relationships found.'}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View 2: HIERARCHY TREE */}
+        {view === 'tree' && (
+          <div className="mt-6 space-y-4">
+            {treeNodes.length > 0 ? (
+              treeNodes.map((req, rIdx) => {
+                const stories = asList<Row>(req.stories);
+                return (
+                  <div key={String(req.id || rIdx)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    {/* Requirement Node */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-lg bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white uppercase tracking-wider">
+                          REQ
+                        </span>
+                        <h3 className="font-bold text-slate-900 text-base">{String(req.title)}</h3>
+                        <Badge value={req.status || 'DRAFT'} />
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {String(req.type || 'FUNCTIONAL')} · Priority {String(req.priority || 'MEDIUM')}
+                      </div>
+                    </div>
+                    {Boolean(req.description) && (
+                      <p className="mt-2 text-xs text-slate-500 leading-relaxed">{String(req.description)}</p>
+                    )}
+
+                    {/* Stories nested */}
+                    <div className="mt-4 space-y-3 pl-4 border-l-2 border-indigo-200 ml-2">
+                      {stories.length > 0 ? (
+                        stories.map((story) => {
+                          const tasks = asList<Row>(story.tasks);
+                          return (
+                            <div key={String(story.id)} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 uppercase">
+                                    STORY
+                                  </span>
+                                  <p className="font-semibold text-slate-800 text-sm">{String(story.title)}</p>
+                                  <Badge value={story.status || 'BACKLOG'} />
+                                </div>
+                                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                                  {String(story.storyPoints ?? '—')} pts
+                                </span>
+                              </div>
+
+                              {/* Tasks nested */}
+                              <div className="mt-3 space-y-2 pl-4 border-l-2 border-blue-200 ml-2">
+                                {tasks.length > 0 ? (
+                                  tasks.map((task) => {
+                                    const taskBugs = asList<Row>(task.bugs);
+                                    return (
+                                      <div
+                                        key={String(task.id)}
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg bg-white border border-slate-200 p-2.5 text-xs"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span className="rounded bg-slate-100 px-1 py-0.5 text-[9px] font-bold text-slate-600 uppercase">
+                                            TASK
+                                          </span>
+                                          <span className="font-medium text-slate-800">{String(task.title)}</span>
+                                          <Badge value={task.status} />
+                                        </div>
+
+                                        <div className="flex items-center gap-3 text-slate-500">
+                                          <span>Assignee: {String((task.assignee as Row)?.name || 'Unassigned')}</span>
+                                          {taskBugs.length > 0 && (
+                                            <span className="font-semibold text-rose-600">
+                                              🐛 {taskBugs.length} defect(s)
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <p className="text-xs italic text-slate-400">No tasks created for this story yet.</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-xs italic text-amber-600 bg-amber-50 rounded-lg p-2.5">
+                          ⚠️ No user stories linked to this requirement. (Coverage Gap)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="surface p-12 text-center text-sm text-slate-500">
+                No requirement hierarchy available.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View 3: GAP ANALYSIS */}
+        {view === 'gaps' && (
+          <div className="mt-6 space-y-6">
+            {/* Uncovered Requirements */}
+            <div className="rounded-2xl border border-slate-200 p-5 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-amber-100 p-1.5 text-amber-600">⚠️</span>
+                  <h3 className="font-semibold text-slate-800 text-sm">
+                    Requirements without User Stories ({uncoveredReqs.length})
+                  </h3>
+                </div>
+                <span className="badge bg-amber-50 text-amber-700">Needs Breakdown</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Requirements that have not yet been broken down into deliverable user stories.
+              </p>
+
+              <div className="mt-3 space-y-2">
+                {uncoveredReqs.length > 0 ? (
+                  uncoveredReqs.map((req) => (
+                    <div
+                      key={String(req.id)}
+                      className="flex items-center justify-between rounded-xl border border-dashed border-amber-200 bg-amber-50/40 p-3 text-xs"
+                    >
+                      <span className="font-semibold text-slate-800">{String(req.title)}</span>
+                      <Badge value={req.status || 'DRAFT'} />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-emerald-600 bg-emerald-50 rounded-lg p-3">
+                    ✓ All requirements are broken down into user stories!
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Orphan User Stories */}
+            <div className="rounded-2xl border border-slate-200 p-5 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-rose-100 p-1.5 text-rose-600">⚠️</span>
+                  <h3 className="font-semibold text-slate-800 text-sm">
+                    Orphan User Stories ({unlinkedStories.length})
+                  </h3>
+                </div>
+                <span className="badge bg-rose-50 text-rose-700">Missing Requirement</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                User stories that exist in the backlog but have no parent requirement linked for traceability.
+              </p>
+
+              <div className="mt-3 space-y-2">
+                {unlinkedStories.length > 0 ? (
+                  unlinkedStories.map((story) => (
+                    <div
+                      key={String(story.id)}
+                      className="flex items-center justify-between rounded-xl border border-dashed border-rose-200 bg-rose-50/40 p-3 text-xs"
+                    >
+                      <div>
+                        <span className="font-semibold text-slate-800">{String(story.title)}</span>
+                        <span className="ml-2 text-slate-400">({String(story.storyPoints || '—')} pts)</span>
+                      </div>
+                      <button
+                        className="btn-secondary px-2.5 py-1 text-xs"
+                        onClick={() => {
+                          setSelectedReqId(String(treeNodes[0]?.id || ''));
+                          setLinkingModal({
+                            open: true,
+                            storyId: String(story.id),
+                            storyTitle: String(story.title),
+                          });
+                        }}
+                      >
+                        Link to Requirement
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-emerald-600 bg-emerald-50 rounded-lg p-3">
+                    ✓ All user stories are linked to parent requirements!
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Orphan Defects */}
+            <div className="rounded-2xl border border-slate-200 p-5 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-slate-100 p-1.5 text-slate-600">🐛</span>
+                  <h3 className="font-semibold text-slate-800 text-sm">
+                    Unlinked Defects & Bugs ({unlinkedBugs.length})
+                  </h3>
+                </div>
+                <span className="badge bg-slate-100 text-slate-700">Unlinked</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Bugs that are not associated with any requirement, user story, or task.
+              </p>
+
+              <div className="mt-3 space-y-2">
+                {unlinkedBugs.length > 0 ? (
+                  unlinkedBugs.map((bug) => (
+                    <div
+                      key={String(bug.id)}
+                      className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs"
+                    >
+                      <span className="font-semibold text-slate-800">🐛 {String(bug.title)}</span>
+                      <Badge value={bug.status || 'OPEN'} />
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-emerald-600 bg-emerald-50 rounded-lg p-3">
+                    ✓ All logged defects have traceability links!
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal for linking orphan stories to requirements */}
+        {linkingModal.open && (
+          <Modal
+            title="Link Story to Requirement"
+            close={() => setLinkingModal({ open: false, storyId: '', storyTitle: '' })}
+          >
+            <form onSubmit={handleLinkStory} className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Link user story <span className="font-semibold">"{linkingModal.storyTitle}"</span> to a parent requirement:
+              </p>
+              <label className="block text-sm font-medium text-slate-700">
+                Select Requirement
+                <select
+                  className="input mt-1.5"
+                  value={selectedReqId}
+                  onChange={(e) => setSelectedReqId(e.target.value)}
+                  required
+                >
+                  <option value="">Choose a requirement…</option>
+                  {treeNodes.map((r) => (
+                    <option key={String(r.id)} value={String(r.id)}>
+                      {String(r.title)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setLinkingModal({ open: false, storyId: '', storyTitle: '' })}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+                <button className="btn-primary" disabled={busy || !selectedReqId}>
+                  {busy ? 'Linking…' : 'Link story'}
+                </button>
+              </div>
+            </form>
+          </Modal>
+        )}
+      </section>
+    </div>
+  );
+};
+
 
 const CrudList = ({ title, addLabel, items, onAdd, onUpdate, onDelete, fields, render, actions, canAdd = true }: { title: string; addLabel: string; items: Row[]; onAdd: (data: Row) => Promise<void>; onUpdate: (item: Row, data: Row) => Promise<void>; onDelete: (item: Row) => Promise<void>; fields: React.ReactNode; render: (item: Row) => React.ReactNode; actions?: (item: Row) => React.ReactNode; canAdd?: boolean }) => { const [editing, setEditing] = useState<Row | null>(null); const [form, setForm] = useState<Row>({}); const [error, setError] = useState(''); const open = (item?: Row) => { setError(''); setEditing(item || {}); setForm(item || {}); }; const save = async (e: React.FormEvent) => { e.preventDefault(); try { if (editing?.id) await onUpdate(editing, form); else await onAdd(form); setEditing(null); } catch (err) { setError(err instanceof Error ? err.message : 'Request failed'); } }; return <section className="surface p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">Project operations</p><h2 className="mt-1 text-xl font-semibold">{title}</h2></div>{canAdd && <button className="btn-primary" onClick={() => open()}><Plus size={16}/>{addLabel}</button>}</div>{items.length ? <div className="mt-6 space-y-3">{items.map((item, i) => <div key={String(item.id || i)} className="rounded-xl border border-slate-100 p-4"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="min-w-0 flex-1">{render(item)}</div><div className="flex shrink-0 items-center gap-2"><button className="btn-secondary px-3 py-1.5" onClick={() => open(item)}>Edit</button>{actions?.(item)}<button className="rounded-lg p-2 text-rose-500 hover:bg-rose-50" onClick={async () => { if (window.confirm(`Delete this ${title.toLowerCase().slice(0, -1)}?`)) await onDelete(item); }}><Trash2 size={16}/></button></div></div></div>)}</div> : <div className="py-14 text-center text-sm text-slate-500">No {title.toLowerCase()} yet.</div>}{editing && <Modal title={editing.id ? `Edit ${title.slice(0, -1).toLowerCase()}` : addLabel} close={() => setEditing(null)}><form onSubmit={save} className="space-y-4"><FormContext.Provider value={{ form, setForm }}>{fields}</FormContext.Provider>{error && <ErrorText text={error}/>}<button className="btn-primary w-full"><Save size={15}/> Save changes</button></form></Modal>}</section>; };
 
 const RequirementLinks = ({ requirementId, stories, notify, refresh }: { requirementId: string; stories: Row[]; notify: (s: string) => void; refresh: () => void }) => { const [linked, setLinked] = useState<Row[]>([]); const [selected, setSelected] = useState(''); const load = () => get<unknown>(endpoints.requirementStories(requirementId)).then(data => setLinked(asList<Row>(data))).catch(() => setLinked([])); useEffect(() => { load(); }, [requirementId]); return <div className="mt-3 rounded-lg bg-slate-50 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Linked stories</p><div className="mt-2 flex flex-wrap gap-2">{linked.map(story => <span key={String(story.id)} className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs text-slate-700">{String(story.title || (story.userStory as Row)?.title)}<button onClick={async () => { await del(`/requirements/${requirementId}/stories/${String(story.id || (story.userStory as Row)?.id)}`); notify('Story unlinked'); load(); refresh(); }} className="text-rose-500"><X size={12}/></button></span>)}{!linked.length && <span className="text-xs text-slate-400">No stories linked</span>}</div>{stories.length > linked.length && <div className="mt-2 flex gap-2"><select className="input py-1 text-xs" value={selected} onChange={e => setSelected(e.target.value)}><option value="">Link a story…</option>{stories.filter(story => !linked.some(item => String(item.id || (item.userStory as Row)?.id) === String(story.id))).map(story => <option key={String(story.id)} value={String(story.id)}>{String(story.title)}</option>)}</select><button disabled={!selected} className="btn-secondary px-2 py-1 text-xs" onClick={async () => { await post(`/requirements/${requirementId}/stories`, { userStoryId: selected }); notify('Story linked'); setSelected(''); load(); refresh(); }}>Link</button></div>}</div>; };
-
-
-
-type FormContextValue = { form: Row; setForm: React.Dispatch<React.SetStateAction<Row>> }; const FormContext = React.createContext<FormContextValue | null>(null); const Field = ({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) => <label className="block text-sm font-medium text-slate-700">{label}<input className="input mt-1.5" type={type} required={required} value={value} onChange={e => onChange(e.target.value)}/></label>; const Textarea = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => <label className="block text-sm font-medium text-slate-700">{label}<textarea className="input mt-1.5 min-h-24" value={value} onChange={e => onChange(e.target.value)}/></label>; const Select = ({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) => <label className="block text-sm font-medium text-slate-700">{label}<select className="input mt-1.5" value={value} onChange={e => onChange(e.target.value)}>{options.map(option => <option key={option}>{option}</option>)}</select></label>;
+type FormContextValue = { form: Row; setForm: React.Dispatch<React.SetStateAction<Row>> };
+const FormContext = React.createContext<FormContextValue | null>(null);
+const Field = ({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) => <label className="block text-sm font-medium text-slate-700">{label}<input className="input mt-1.5" type={type} required={required} value={value} onChange={e => onChange(e.target.value)}/></label>;
+const Textarea = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => <label className="block text-sm font-medium text-slate-700">{label}<textarea className="input mt-1.5 min-h-24" value={value} onChange={e => onChange(e.target.value)}/></label>;
+const Select = ({ label, value, options, onChange }: { label: string; value: string; options: (string | { value: string; label: string })[]; onChange: (value: string) => void }) => (
+  <label className="block text-sm font-medium text-slate-700">
+    {label}
+    <select className="input mt-1.5" value={value} onChange={e => onChange(e.target.value)}>
+      {options.map((opt, i) => {
+        const val = typeof opt === 'string' ? opt : opt.value;
+        const lab = typeof opt === 'string' ? opt : opt.label;
+        return <option key={`${val}-${i}`} value={val}>{lab}</option>;
+      })}
+    </select>
+  </label>
+);
 const RequirementFields = () => { const c = React.useContext(FormContext)!; return <><Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/><Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/><div className="grid grid-cols-2 gap-3"><Select label="Type" value={String(c.form.type || 'FUNCTIONAL')} options={['FUNCTIONAL','NON_FUNCTIONAL']} onChange={v => c.setForm({...c.form,type:v})}/><Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/></div></>; };
 const StoryFields = () => { const c = React.useContext(FormContext)!; return <><Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/><Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/><div className="grid grid-cols-2 gap-3"><Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/><Field label="Story points" type="number" value={String(c.form.storyPoints || '')} onChange={v => c.setForm({...c.form,storyPoints:Number(v)})}/></div></>; };
 const SprintFields = () => { const c = React.useContext(FormContext)!; return <><Field label="Sprint name" value={String(c.form.name || '')} onChange={v => c.setForm({...c.form,name:v})} required/><div className="grid grid-cols-2 gap-3"><Field label="Start date" type="date" value={String(c.form.startDate || '')} onChange={v => c.setForm({...c.form,startDate:v})} required/><Field label="End date" type="date" value={String(c.form.endDate || '')} onChange={v => c.setForm({...c.form,endDate:v})} required/></div><Select label="Status" value={String(c.form.status || 'PLANNED')} options={['PLANNED','ACTIVE','COMPLETED']} onChange={v => c.setForm({...c.form,status:v})}/></>; };
-const BugFields = ({ requirements = [], stories = [], tasks = [], sprints = [], members = [] }: { requirements?: Row[]; stories?: Row[]; tasks?: Row[]; sprints?: Row[]; members?: Row[] }) => { const c = React.useContext(FormContext)!; return <><Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/><Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/><div className="grid grid-cols-2 gap-3"><Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/><Select label="Severity" value={String(c.form.severity || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,severity:v})}/></div><Select label="Status" value={String(c.form.status || 'OPEN')} options={['OPEN','IN_PROGRESS','RESOLVED','CLOSED']} onChange={v => c.setForm({...c.form,status:v})}/><Select label="Assignee" value={String(c.form.assigneeId || '')} options={['', ...members.map(item => String(item.userId || (item.user as Row)?.id || item.id))]} onChange={v => c.setForm({...c.form,assigneeId:v || null})}/><Select label="Requirement" value={String(c.form.requirementId || '')} options={['', ...requirements.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,requirementId:v || null})}/><Select label="User story" value={String(c.form.userStoryId || '')} options={['', ...stories.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,userStoryId:v || null})}/><Select label="Task" value={String(c.form.taskId || '')} options={['', ...tasks.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,taskId:v || null})}/><Select label="Sprint" value={String(c.form.sprintId || '')} options={['', ...sprints.map(item => String(item.id))]} onChange={v => c.setForm({...c.form,sprintId:v || null})}/><Field label="Pull request URL (optional)" value={String(c.form.pullRequestUrl || '')} onChange={v => c.setForm({...c.form,pullRequestUrl:v})}/><Field label="PR number (optional)" type="number" value={String(c.form.prNumber || '')} onChange={v => c.setForm({...c.form,prNumber:v ? Number(v) : null})}/></>; };
-const Modal = ({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) => <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"><div className="surface w-full max-w-lg p-6"><div className="flex items-center justify-between"><h3 className="text-xl font-semibold">{title}</h3><button onClick={close}><X className="text-slate-400" size={19}/></button></div><div className="mt-6">{children}</div></div></div>; const ErrorText = ({ text }: { text: string }) => <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">{text}</div>;
+const BugFields = ({ requirements = [], stories = [], tasks = [], sprints = [], members = [] }: { requirements?: Row[]; stories?: Row[]; tasks?: Row[]; sprints?: Row[]; members?: Row[] }) => {
+  const c = React.useContext(FormContext)!;
+  const memberOptions = [
+    { value: '', label: 'Unassigned' },
+    ...members.map(item => {
+      const u = (item.user || {}) as Row;
+      const id = String(item.userId || u.id || item.id || '');
+      const name = String(u.name || item.name || '');
+      const email = String(u.email || item.email || '');
+      const label = name && email ? `${name} (${email})` : (name || email || id);
+      return { value: id, label };
+    }).filter(opt => Boolean(opt.value))
+  ];
+  const reqOptions = [
+    { value: '', label: 'None' },
+    ...requirements.map(item => ({
+      value: String(item.id),
+      label: String(item.title || item.id)
+    }))
+  ];
+  const storyOptions = [
+    { value: '', label: 'None' },
+    ...stories.map(item => ({
+      value: String(item.id),
+      label: String(item.title || item.id)
+    }))
+  ];
+  const taskOptions = [
+    { value: '', label: 'None' },
+    ...tasks.map(item => ({
+      value: String(item.id),
+      label: String(item.title || item.id)
+    }))
+  ];
+  const sprintOptions = [
+    { value: '', label: 'None' },
+    ...sprints.map(item => ({
+      value: String(item.id),
+      label: String(item.name || item.id)
+    }))
+  ];
+  return (
+    <>
+      <Field label="Title" value={String(c.form.title || '')} onChange={v => c.setForm({...c.form,title:v})} required/>
+      <Textarea label="Description" value={String(c.form.description || '')} onChange={v => c.setForm({...c.form,description:v})}/>
+      <div className="grid grid-cols-2 gap-3">
+        <Select label="Priority" value={String(c.form.priority || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,priority:v})}/>
+        <Select label="Severity" value={String(c.form.severity || 'MEDIUM')} options={['LOW','MEDIUM','HIGH','CRITICAL']} onChange={v => c.setForm({...c.form,severity:v})}/>
+      </div>
+      <Select label="Status" value={String(c.form.status || 'OPEN')} options={['OPEN','IN_PROGRESS','RESOLVED','CLOSED']} onChange={v => c.setForm({...c.form,status:v})}/>
+      <Select label="Assignee" value={String(c.form.assigneeId || '')} options={memberOptions} onChange={v => c.setForm({...c.form,assigneeId:v || null})}/>
+      <Select label="Requirement" value={String(c.form.requirementId || '')} options={reqOptions} onChange={v => c.setForm({...c.form,requirementId:v || null})}/>
+      <Select label="User story" value={String(c.form.userStoryId || '')} options={storyOptions} onChange={v => c.setForm({...c.form,userStoryId:v || null})}/>
+      <Select label="Task" value={String(c.form.taskId || '')} options={taskOptions} onChange={v => c.setForm({...c.form,taskId:v || null})}/>
+      <Select label="Sprint" value={String(c.form.sprintId || '')} options={sprintOptions} onChange={v => c.setForm({...c.form,sprintId:v || null})}/>
+      <Field label="Pull request URL (optional)" value={String(c.form.pullRequestUrl || '')} onChange={v => c.setForm({...c.form,pullRequestUrl:v})}/>
+      <Field label="PR number (optional)" type="number" value={String(c.form.prNumber || '')} onChange={v => c.setForm({...c.form,prNumber:v ? Number(v) : null})}/>
+    </>
+  );
+};
+const Modal = ({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs overflow-y-auto">
+    <div className="surface flex w-full max-w-lg max-h-[90vh] flex-col p-6 my-auto shadow-2xl">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 pb-3">
+        <h3 className="text-xl font-semibold">{title}</h3>
+        <button type="button" onClick={close} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
+          <X size={19}/>
+        </button>
+      </div>
+      <div className="mt-4 flex-1 overflow-y-auto pr-1">
+        {children}
+      </div>
+    </div>
+  </div>
+);
+const ErrorText = ({ text }: { text: string }) => <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">{text}</div>;
