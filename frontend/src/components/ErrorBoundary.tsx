@@ -37,25 +37,25 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex min-h-[400px] flex-col items-center justify-center p-6 text-center">
-          <div className="rounded-full bg-rose-50 p-4 text-rose-500 ring-8 ring-rose-50/50">
-            <AlertTriangle size={32} />
+        <div className="flex min-h-[460px] flex-col items-center justify-center p-8 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 ring-8 ring-rose-50/60">
+            <AlertTriangle size={30} />
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-slate-800">Something went wrong</h2>
-          <p className="mt-2 max-w-md text-sm text-slate-500">
+          <h2 className="mt-5 text-xl font-bold tracking-tight text-slate-900">Something went wrong</h2>
+          <p className="mt-2.5 max-w-md text-sm leading-relaxed text-slate-500">
             An unexpected error occurred while rendering this view.
           </p>
           {this.state.error?.message && (
-            <pre className="mt-3 max-w-lg overflow-x-auto rounded-lg bg-slate-100 p-3 text-xs text-rose-600">
+            <pre className="mt-4 max-w-lg overflow-x-auto rounded-xl border border-rose-100 bg-rose-50/60 p-4 text-xs text-rose-700">
               {this.state.error.message}
             </pre>
           )}
           <button
             type="button"
             onClick={this.handleReset}
-            className="btn-primary mt-6 inline-flex items-center gap-2"
+            className="btn-primary mt-7 inline-flex items-center gap-2"
           >
-            <RefreshCw size={16} />
+            <RefreshCw size={15} />
             Reload Page
           </button>
         </div>

@@ -91,17 +91,18 @@ export const NotificationsPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div className="space-y-10">
+      {/* Page header */}
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">Workspace updates</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Notifications</h1>
-          <p className="mt-2 text-slate-500">
+          <h1 className="mt-2.5 text-[1.75rem] font-semibold tracking-tight">Notifications</h1>
+          <p className="mt-2 text-[15px] text-slate-500">
             Reviews, assignments, and project activity that need your attention.
           </p>
         </div>
         <button className="btn-secondary" onClick={allRead}>
-          <CheckCheck size={16} /> Mark all as read
+          <CheckCheck size={15} /> Mark all as read
         </button>
       </div>
 
@@ -113,7 +114,7 @@ export const NotificationsPage: React.FC = () => {
 
       <section className="surface overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-sm text-slate-500">Loading notifications…</div>
+          <div className="p-14 text-center text-sm text-slate-500">Loading notifications…</div>
         ) : items.length ? (
           <div className="divide-y divide-slate-100">
             {items.map((item) => {
@@ -131,10 +132,10 @@ export const NotificationsPage: React.FC = () => {
               return (
                 <div
                   key={item.id}
-                  className={`flex gap-4 p-5 ${read ? '' : 'bg-indigo-50/40'}`}
+                  className={`flex gap-4 p-5 sm:p-6 transition-colors ${read ? '' : 'bg-indigo-50/30'}`}
                 >
                   <div
-                    className={`mt-1 rounded-xl p-2.5 ${
+                    className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
                       read ? 'bg-slate-100 text-slate-400' : 'bg-indigo-100 text-indigo-600'
                     }`}
                   >
@@ -149,40 +150,40 @@ export const NotificationsPage: React.FC = () => {
                         {formatDate(item.createdAt)}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
                       {item.message ||
                         item.body ||
                         'A new activity was recorded in your workspace.'}
                     </p>
-                    <div className="mt-3 flex items-center gap-3">
+                    <div className="mt-3.5 flex items-center gap-3">
                       {isPending ? (
                         <>
                           <button
-                            className="btn-primary px-3 py-1.5 text-xs font-semibold"
+                            className="btn-primary px-3.5 py-1.5 text-xs font-semibold"
                             onClick={() => respond(item, 'ACCEPT')}
                           >
                             Accept
                           </button>
                           <button
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                            className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
                             onClick={() => respond(item, 'REJECT')}
                           >
                             Reject
                           </button>
                         </>
                       ) : isAccepted ? (
-                        <span className="inline-flex items-center rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                        <span className="inline-flex items-center rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                           Request accepted
                         </span>
                       ) : isRejected ? (
-                        <span className="inline-flex items-center rounded-md bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                        <span className="inline-flex items-center rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
                           Request not accepted
                         </span>
                       ) : (
                         <>
                           {!read && (
                             <button
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 transition hover:text-indigo-700"
                               onClick={() => mark(item)}
                             >
                               <Check size={14} /> Mark read
@@ -190,7 +191,7 @@ export const NotificationsPage: React.FC = () => {
                           )}
                           {item.link && (
                             <button
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 transition hover:text-slate-700"
                               onClick={() => navigate(String(item.link))}
                             >
                               <ExternalLink size={13} /> Open related item
@@ -205,9 +206,9 @@ export const NotificationsPage: React.FC = () => {
             })}
           </div>
         ) : (
-          <div className="p-14 text-center">
-            <Bell className="mx-auto text-slate-300" size={30} />
-            <p className="mt-3 text-sm text-slate-500">You’re all caught up.</p>
+          <div className="p-16 text-center">
+            <Bell className="mx-auto text-slate-300" size={32} />
+            <p className="mt-4 text-sm text-slate-500">You're all caught up.</p>
           </div>
         )}
       </section>
